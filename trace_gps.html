@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Trace GPS V2.3</title>
+<title>Trace GPS V2.3b</title>
 <link href="https://unpkg.com/maplibre-gl@5.2.0/dist/maplibre-gl.css" rel="stylesheet">
 <style>
 :root{--bg:#0c2230;--panel:rgba(8,24,34,.96);--panel2:rgba(8,24,34,.99);--border:rgba(255,255,255,.08);--text:#edf4f8;--muted:#a8bcc8;--cyan:#27d8ff;--red:#ff4d4f;--trace:#7a4127;--safe-top:env(safe-area-inset-top);--safe-bottom:env(safe-area-inset-bottom)}
@@ -86,55 +86,261 @@ const autoCenterInput=document.getElementById('autoCenter');
 const threeDInput=document.getElementById('threeD');
 const northBtn=document.getElementById('northBtn');
 const els={speed:document.getElementById('speed'),distance:document.getElementById('distance'),altitude:document.getElementById('altitude'),accuracy:document.getElementById('accuracy'),duration:document.getElementById('duration'),status:document.getElementById('status'),mapSheet:document.getElementById('mapSheet'),settingsSheet:document.getElementById('settingsSheet'),tracesSheet:document.getElementById('tracesSheet'),destSheet:document.getElementById('destSheet'),layerList:document.getElementById('layerList'),highAccuracy:document.getElementById('highAccuracy'),colorChips:document.getElementById('colorChips'),traceList:document.getElementById('traceList'),stopModal:document.getElementById('stopModal'),recordName:document.getElementById('recordName'),destInput:document.getElementById('destInput'),destResults:document.getElementById('destResults'),destInfo:document.getElementById('destInfo')};
-let route=[];let totalMeters=0;let watchId=null;let passiveWatchId=null;let timer=null;let startTime=null;let currentColor=localStorage.getItem('tracegps.color')||colorChoices[0];let currentLayer=localStorage.getItem('tracegps.layer')||'osm';let autoCenter=true;let selectedSavedTraceId=null;let currentPoint=null;let destination=null;let threeD=false;let northUp=false;let destMarker=null;
+
+// --- State ---
+let route=[];
+let totalMeters=0;
+let masterWatchId=null;   // v2.3b: watchPosition unique
+let isRecording=false;    // v2.3b: flag enregistrement (remplace watchId!==null)
+let layersReady=false;    // v2.3b: flag layers initialisés (évite map.getSource() répété)
+let timer=null;
+let startTime=null;
+let currentColor=localStorage.getItem('tracegps.color')||colorChoices[0];
+let currentLayer=localStorage.getItem('tracegps.layer')||'osm';
+let autoCenter=true;
+let selectedSavedTraceId=null;
+let currentPoint=null;
+let destination=null;
+let threeD=false;
+let northUp=false;
+let destMarker=null;
+
+// v2.3b: GeoJSON live muté — évite .map() sur tout route[] à chaque point GPS
+const liveGeoJSON={type:'Feature',geometry:{type:'LineString',coordinates:[]}};
+
 const baseStyle={version:8,glyphs:'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',sources:{},layers:[{id:'bg',type:'background',paint:{'background-color':'#0c2230'}}]};
 const map=new maplibregl.Map({container:'map',style:baseStyle,center:[4.85,45.75],zoom:13,pitch:0,maxPitch:80,attributionControl:true,dragRotate:true,touchPitch:true,touchZoomRotate:true,bearingSnap:7});
 map.addControl(new maplibregl.AttributionControl({compact:true}));
 map.touchZoomRotate.enable();
+
+// --- UI helpers ---
 function closeSheets(){els.mapSheet.classList.remove('open');els.settingsSheet.classList.remove('open');els.tracesSheet.classList.remove('open');els.destSheet.classList.remove('open')}
 function toggleSheet(name){const pool={maps:els.mapSheet,settings:els.settingsSheet,traces:els.tracesSheet,dest:els.destSheet};const target=pool[name];const open=target.classList.contains('open');Object.values(pool).forEach(x=>x.classList.remove('open'));if(!open)target.classList.add('open')}
 function fmtDuration(ms){const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60;return h?`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`}
 function defaultRecordName(){const d=new Date();const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`}
+
+// --- Geo math ---
 function hav(a,b){const R=6371000,rad=d=>d*Math.PI/180;const dLat=rad(b.lat-a.lat),dLng=rad(b.lng-a.lng),la1=rad(a.lat),la2=rad(b.lat);const x=Math.sin(dLat/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
 function bearingDeg(a,b){const toRad=d=>d*Math.PI/180,toDeg=r=>(r*180/Math.PI+360)%360;const y=Math.sin(toRad(b.lng-a.lng))*Math.cos(toRad(b.lat));const x=Math.cos(toRad(a.lat))*Math.sin(toRad(b.lat))-Math.sin(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.cos(toRad(b.lng-a.lng));return toDeg(Math.atan2(y,x))}
+
+// --- Status / UI state ---
 function updateDuration(){els.duration.textContent=startTime?fmtDuration(Date.now()-startTime):'00:00'}
-function updateRec(){rec.classList.toggle('on',watchId!==null);northBtn.style.top = watchId!==null ? 'calc(var(--safe-top) + 102px)' : 'calc(var(--safe-top) + 58px)'}
+function updateRec(){rec.classList.toggle('on',isRecording);northBtn.style.top=isRecording?'calc(var(--safe-top) + 102px)':'calc(var(--safe-top) + 58px)'}
 function updateLocateButton(){locateBtn.classList.toggle('off',!autoCenter)}
 function updateNorthButton(){northBtn.classList.toggle('on',northUp)}
-function setStatus(){let msg = watchId!==null ? 'Enregistrement en cours' : 'Prêt'; if(destination && currentPoint){const d=hav(currentPoint,destination)/1000; msg += ` · But à ${d.toFixed(2)} km`; } els.status.textContent = msg; }
-function traceGeo(coords){return {type:'Feature',geometry:{type:'LineString',coordinates:coords||route.map(p=>[p.lng,p.lat])}}}
-function ensureLayers(){if(!map.getSource('trace-live')){map.addSource('trace-live',{type:'geojson',data:traceGeo()});map.addLayer({id:'trace-live',type:'line',source:'trace-live',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':currentColor,'line-width':5,'line-opacity':.95}});map.addSource('trace-saved',{type:'geojson',data:{type:'FeatureCollection',features:[]}});map.addLayer({id:'trace-saved',type:'line',source:'trace-saved',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#94a3b8','line-width':4,'line-opacity':.75}});map.addSource('dot',{type:'geojson',data:{type:'FeatureCollection',features:[]}});map.addLayer({id:'dot',type:'circle',source:'dot',paint:{'circle-radius':7,'circle-color':'#27d8ff','circle-stroke-color':'#fff','circle-stroke-width':3}});map.addSource('accuracy',{type:'geojson',data:{type:'FeatureCollection',features:[]}});map.addLayer({id:'accuracy',type:'fill',source:'accuracy',paint:{'fill-color':'#27d8ff','fill-opacity':.12}})}}
+function setStatus(){let msg=isRecording?'Enregistrement en cours':'Prêt';if(destination&&currentPoint){const d=hav(currentPoint,destination)/1000;msg+=` · But à ${d.toFixed(2)} km`}els.status.textContent=msg}
+
+// --- Map layers ---
+// v2.3b: layersReady flag — ensureLayers() ne tourne qu'une seule fois
+function ensureLayers(){
+  if(layersReady)return;
+  layersReady=true;
+  map.addSource('trace-live',{type:'geojson',data:liveGeoJSON});
+  map.addLayer({id:'trace-live',type:'line',source:'trace-live',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':currentColor,'line-width':5,'line-opacity':.95}});
+  map.addSource('trace-saved',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({id:'trace-saved',type:'line',source:'trace-saved',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#94a3b8','line-width':4,'line-opacity':.75}});
+  map.addSource('dot',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({id:'dot',type:'circle',source:'dot',paint:{'circle-radius':7,'circle-color':'#27d8ff','circle-stroke-color':'#fff','circle-stroke-width':3}});
+  map.addSource('accuracy',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({id:'accuracy',type:'fill',source:'accuracy',paint:{'fill-color':'#27d8ff','fill-opacity':.12}});
+}
+
 function enable3D(on){threeD=on;if(on){if(!map.getSource('terrainSource')){map.addSource('terrainSource',{type:'raster-dem',url:DEM_URL,tileSize:256})}if(!map.getLayer('hills')){map.addLayer({id:'hills',type:'hillshade',source:'terrainSource',paint:{'hillshade-shadow-color':'#473B24'}},'trace-live')}map.setTerrain({source:'terrainSource',exaggeration:1});map.easeTo({pitch:70,duration:500})}else{if(map.getTerrain())map.setTerrain(null);if(map.getLayer('hills'))map.removeLayer('hills');map.easeTo({pitch:0,duration:500})}}
-function setNorthUp(on){northUp=on;if(on){map.resetNorth();map.dragRotate.disable();map.touchZoomRotate.disableRotation()}else{map.dragRotate.enable();map.touchZoomRotate.enableRotation && map.touchZoomRotate.enableRotation()}updateNorthButton()}
+function setNorthUp(on){northUp=on;if(on){map.resetNorth();map.dragRotate.disable();map.touchZoomRotate.disableRotation&&map.touchZoomRotate.disableRotation()}else{map.dragRotate.enable();map.touchZoomRotate.enableRotation&&map.touchZoomRotate.enableRotation()}updateNorthButton()}
 function setBase(key){currentLayer=key;localStorage.setItem('tracegps.layer',key);const meta=sourcesMeta.find(x=>x.key===key);if(!meta||meta.disabled||!meta.tiles)return;if(map.getLayer('base'))map.removeLayer('base');if(map.getSource('base'))map.removeSource('base');map.addSource('base',{type:'raster',tiles:meta.tiles,tileSize:256,attribution:meta.label});map.addLayer({id:'base',type:'raster',source:'base'},'trace-live');renderLayers();closeSheets()}
-function renderLayers(){els.layerList.innerHTML='';let lastGroup='';for(const m of sourcesMeta){if(m.group!==lastGroup){const t=document.createElement('div');t.className='groupTitle';t.textContent=m.group;els.layerList.appendChild(t);lastGroup=m.group}const b=document.createElement('button');b.className='option'+(currentLayer===m.key?' active':'')+(m.disabled?' disabled':'');b.innerHTML=`<span class="leftBox"><span>${m.label}</span><span>${m.note||''}</span></span><span class="pill">${m.disabled?'OFF':currentLayer===m.key?'OK':''}</span>`;b.onclick=()=>{if(!m.disabled&&m.tiles)setBase(m.key)};els.layerList.appendChild(b)}}
-function renderColors(){els.colorChips.innerHTML='';for(const c of colorChoices){const b=document.createElement('button');b.className='chip'+(currentColor===c?' active':'');b.style.background=c;b.onclick=()=>{currentColor=c;localStorage.setItem('tracegps.color',c);if(map.getLayer('trace-live'))map.setPaintProperty('trace-live','line-color',c);renderColors()};els.colorChips.appendChild(b)}}
+
+// v2.3b: DocumentFragment pour éviter reflow multiple
+function renderLayers(){
+  const frag=document.createDocumentFragment();
+  let lastGroup='';
+  for(const m of sourcesMeta){
+    if(m.group!==lastGroup){const t=document.createElement('div');t.className='groupTitle';t.textContent=m.group;frag.appendChild(t);lastGroup=m.group}
+    const b=document.createElement('button');
+    b.className='option'+(currentLayer===m.key?' active':'')+(m.disabled?' disabled':'');
+    b.innerHTML=`<span class="leftBox"><span>${m.label}</span><span>${m.note||''}</span></span><span class="pill">${m.disabled?'OFF':currentLayer===m.key?'OK':''}</span>`;
+    b.onclick=()=>{if(!m.disabled&&m.tiles)setBase(m.key)};
+    frag.appendChild(b);
+  }
+  els.layerList.innerHTML='';els.layerList.appendChild(frag);
+}
+
+// v2.3b: DocumentFragment
+function renderColors(){
+  const frag=document.createDocumentFragment();
+  for(const c of colorChoices){
+    const b=document.createElement('button');
+    b.className='chip'+(currentColor===c?' active':'');
+    b.style.background=c;
+    b.onclick=()=>{currentColor=c;localStorage.setItem('tracegps.color',c);if(map.getLayer('trace-live'))map.setPaintProperty('trace-live','line-color',c);renderColors()};
+    frag.appendChild(b);
+  }
+  els.colorChips.innerHTML='';els.colorChips.appendChild(frag);
+}
+
 function updateSavedTraceLayer(){const items=loadSaved();let feats=[];if(selectedSavedTraceId){const one=items.find(x=>x.id===selectedSavedTraceId);if(one)feats=[{type:'Feature',properties:{name:one.name},geometry:{type:'LineString',coordinates:one.coords}}]}else{feats=items.map(x=>({type:'Feature',properties:{name:x.name},geometry:{type:'LineString',coordinates:x.coords}}))}if(map.getSource('trace-saved'))map.getSource('trace-saved').setData({type:'FeatureCollection',features:feats});traceIcon.className=(items.length?'active':'off')}
-function saveCurrentTrace(name){if(route.length<2)return;const items=loadSaved();items.unshift({id:crypto.randomUUID(),name,createdAt:new Date().toISOString(),durationMs:Date.now()-startTime,distanceMeters:totalMeters,color:currentColor,coords:route.map(p=>[p.lng,p.lat])});localStorage.setItem(storageKey,JSON.stringify(items))}
+
+// v2.3b: try/catch sur setItem — évite crash silencieux si quota localStorage dépassé
+function saveCurrentTrace(name){
+  if(route.length<2)return;
+  const items=loadSaved();
+  items.unshift({id:crypto.randomUUID(),name,createdAt:new Date().toISOString(),durationMs:Date.now()-startTime,distanceMeters:totalMeters,color:currentColor,coords:route.map(p=>[p.lng,p.lat])});
+  try{localStorage.setItem(storageKey,JSON.stringify(items))}
+  catch(e){els.status.textContent='⚠ Stockage plein – trace non sauvegardée';setTimeout(setStatus,4000)}
+}
+
 function loadSaved(){try{return JSON.parse(localStorage.getItem(storageKey)||'[]')}catch(e){return[]}}
 function deleteSaved(id){const items=loadSaved().filter(x=>x.id!==id);localStorage.setItem(storageKey,JSON.stringify(items));if(selectedSavedTraceId===id)selectedSavedTraceId=null;renderTraceList();updateSavedTraceLayer()}
 function zoomToCoords(coords){if(!coords||!coords.length)return;const bounds=coords.reduce((b,c)=>b.extend(c),new maplibregl.LngLatBounds(coords[0],coords[0]));map.fitBounds(bounds,{padding:{top:90,bottom:120,left:30,right:30},duration:500})}
-function renderTraceList(){const items=loadSaved();els.traceList.innerHTML='';if(!items.length){els.traceList.innerHTML='<div class="listMeta">Aucune trace enregistrée.</div>';traceIcon.className='off';return}for(const it of items){const el=document.createElement('div');el.className='listItem';el.innerHTML=`<div class="listTitle">${it.name}</div><div class="listMeta">${(it.distanceMeters/1000).toFixed(2)} km · ${fmtDuration(it.durationMs||0)}</div><div class="listActions"><button class="miniBtn">Afficher</button><button class="miniBtn red">Supprimer</button></div>`;el.querySelector('.miniBtn').onclick=()=>{selectedSavedTraceId=selectedSavedTraceId===it.id?null:it.id;updateSavedTraceLayer();zoomToCoords(it.coords)};el.querySelector('.miniBtn.red').onclick=()=>deleteSaved(it.id);els.traceList.appendChild(el)}traceIcon.className='active'}
-function updateCurrentPositionVisual(p){ensureLayers();map.getSource('dot').setData({type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Point',coordinates:[p.lng,p.lat]}}]});const r=(p.accuracy||0)/111320;const steps=40;const coords=[];for(let i=0;i<=steps;i++){const a=(i/steps)*Math.PI*2;coords.push([p.lng+(r*Math.cos(a))/Math.cos(p.lat*Math.PI/180),p.lat+r*Math.sin(a)])}map.getSource('accuracy').setData({type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Polygon',coordinates:[coords]}}]})}
-function updateMapPoint(p){ensureLayers();map.getSource('trace-live').setData(traceGeo());updateCurrentPositionVisual(p);if(autoCenter && !destination)map.easeTo({center:[p.lng,p.lat],duration:500});if(destination)orientToDestination(false);setStatus()}
+
+// v2.3b: items passé en param pour éviter double lecture localStorage ; DocumentFragment
+function renderTraceList(items=loadSaved()){
+  if(!items.length){els.traceList.innerHTML='<div class="listMeta">Aucune trace enregistrée.</div>';traceIcon.className='off';return}
+  const frag=document.createDocumentFragment();
+  for(const it of items){
+    const el=document.createElement('div');el.className='listItem';
+    el.innerHTML=`<div class="listTitle">${it.name}</div><div class="listMeta">${(it.distanceMeters/1000).toFixed(2)} km · ${fmtDuration(it.durationMs||0)}</div><div class="listActions"><button class="miniBtn">Afficher</button><button class="miniBtn red">Supprimer</button></div>`;
+    el.querySelector('.miniBtn').onclick=()=>{selectedSavedTraceId=selectedSavedTraceId===it.id?null:it.id;updateSavedTraceLayer();zoomToCoords(it.coords)};
+    el.querySelector('.miniBtn.red').onclick=()=>deleteSaved(it.id);
+    frag.appendChild(el);
+  }
+  els.traceList.innerHTML='';els.traceList.appendChild(frag);
+  traceIcon.className='active';
+}
+
+// v2.3b: cosLat précalculé hors boucle ; 32 steps (était 40) suffisant pour un cercle lisse
+function updateCurrentPositionVisual(p){
+  map.getSource('dot').setData({type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Point',coordinates:[p.lng,p.lat]}}]});
+  const r=(p.accuracy||0)/111320;
+  const cosLat=Math.cos(p.lat*Math.PI/180);
+  const coords=[];
+  for(let i=0;i<=32;i++){const a=(i/32)*Math.PI*2;coords.push([p.lng+(r*Math.cos(a))/cosLat,p.lat+r*Math.sin(a)])}
+  map.getSource('accuracy').setData({type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'Polygon',coordinates:[coords]}}]});
+}
+
 function updateStats(p){els.speed.textContent=String(Math.round(((p.speed??0)>0?p.speed:0)*3.6));els.distance.textContent=(totalMeters/1000).toFixed(2);els.altitude.textContent=(p.altitude??null)!==null?String(Math.round(p.altitude)):'---';els.accuracy.textContent=p.accuracy?`±${Math.round(p.accuracy)}`:'---'}
 function makeDestMarker(){const wrap=document.createElement('div');wrap.className='destMarker';wrap.innerHTML='<div class="destArrow">⬇</div><div class="destPin">📍</div><div class="destBadge">0.00 km</div>';return wrap}
-function orientToDestination(animate=true){if(!destination || !currentPoint)return;const distKm=hav(currentPoint,destination)/1000;const bounds=new maplibregl.LngLatBounds([currentPoint.lng,currentPoint.lat],[currentPoint.lng,currentPoint.lat]);bounds.extend([destination.lng,destination.lat]);const brg=bearingDeg(currentPoint,destination);if(destMarker){destMarker.getElement().querySelector('.destBadge').textContent=`${distKm.toFixed(2)} km restant`}if(!northUp){map.fitBounds(bounds,{padding:{top:100,bottom:140,left:40,right:40},bearing:brg,duration:animate?700:0});map.easeTo({bearing:brg,pitch:threeD?70:45,duration:animate?700:0})}else{map.fitBounds(bounds,{padding:{top:100,bottom:140,left:40,right:40},duration:animate?700:0});map.easeTo({bearing:0,pitch:threeD?70:45,duration:animate?700:0})}els.destInfo.textContent=`${destination.label} · ${distKm.toFixed(2)} km`;setStatus()}
+
+// v2.3b: fitBounds unique avec bearing+pitch — élimine le double appel fitBounds+easeTo conflictuel
+function orientToDestination(animate=true){
+  if(!destination||!currentPoint)return;
+  const distKm=hav(currentPoint,destination)/1000;
+  if(destMarker)destMarker.getElement().querySelector('.destBadge').textContent=`${distKm.toFixed(2)} km restant`;
+  const bounds=new maplibregl.LngLatBounds([currentPoint.lng,currentPoint.lat],[destination.lng,destination.lat]);
+  const dur=animate?700:0;
+  map.fitBounds(bounds,{padding:{top:100,bottom:140,left:40,right:40},bearing:northUp?0:bearingDeg(currentPoint,destination),pitch:threeD?70:45,duration:dur});
+  els.destInfo.textContent=`${destination.label} · ${distKm.toFixed(2)} km`;
+  setStatus();
+}
+
 function updateDestinationVisual(){if(destination){if(!destMarker){destMarker=new maplibregl.Marker({element:makeDestMarker(),anchor:'bottom'}).setLngLat([destination.lng,destination.lat]).addTo(map)}else{destMarker.setLngLat([destination.lng,destination.lat])}orientToDestination(false)}else{if(destMarker){destMarker.remove();destMarker=null}els.destInfo.textContent='Aucune destination.';setStatus()}}
 async function searchDestination(){const q=els.destInput.value.trim();if(q.length<2)return;els.destResults.innerHTML='<div class="listMeta">Recherche...</div>';const url=`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=fr&q=${encodeURIComponent(q)}`;try{const res=await fetch(url,{headers:{'Accept':'application/json'}});const data=await res.json();els.destResults.innerHTML='';if(!data.length){els.destResults.innerHTML='<div class="listMeta">Aucun résultat.</div>';return}data.forEach(item=>{const b=document.createElement('button');b.className='resultItem';b.innerHTML=`<div class="listTitle">${item.display_name}</div>`;b.onclick=()=>{destination={lat:parseFloat(item.lat),lng:parseFloat(item.lon),label:item.display_name};updateDestinationVisual();closeSheets()};els.destResults.appendChild(b)})}catch(e){els.destResults.innerHTML='<div class="listMeta">Erreur de recherche.</div>'}}
 function clearDestination(){destination=null;els.destInput.value='';els.destResults.innerHTML='';updateDestinationVisual()}
-function startPassiveWatch(){if(!navigator.geolocation || passiveWatchId!==null)return;passiveWatchId=navigator.geolocation.watchPosition(pos=>{currentPoint={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy,altitude:pos.coords.altitude,speed:pos.coords.speed,timestamp:pos.timestamp};updateCurrentPositionVisual(currentPoint);if(autoCenter && watchId===null && !destination)map.easeTo({center:[currentPoint.lng,currentPoint.lat],duration:500});if(destination)orientToDestination(false);setStatus()},()=>{}, {enableHighAccuracy:true,maximumAge:1000,timeout:15000})}
+
+// v2.3b: watchPosition UNIQUE — remplace passiveWatchId + watchId (était 2 watchPosition en parallèle)
+// Le watch tourne en permanence ; isRecording contrôle l'enregistrement sans redémarrer le GPS.
+function startMasterWatch(){
+  if(!navigator.geolocation||masterWatchId!==null)return;
+  masterWatchId=navigator.geolocation.watchPosition(pos=>{
+    const p={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy,altitude:pos.coords.altitude,speed:pos.coords.speed,timestamp:pos.timestamp};
+    currentPoint=p;
+    if(isRecording){
+      const prev=route[route.length-1];
+      if(prev){const step=hav(prev,p);if(step>=2)totalMeters+=step}
+      route.push(p);
+      liveGeoJSON.geometry.coordinates.push([p.lng,p.lat]); // v2.3b: mutation directe
+      map.getSource('trace-live').setData(liveGeoJSON);
+      updateCurrentPositionVisual(p);
+      updateStats(p);
+      if(route.length===1&&!destination)map.easeTo({center:[p.lng,p.lat],zoom:17,duration:500});
+    }else{
+      updateCurrentPositionVisual(p);
+    }
+    if(autoCenter&&!destination)map.easeTo({center:[p.lng,p.lat],duration:500});
+    if(destination)orientToDestination(false);
+    setStatus();
+  },err=>{
+    if(isRecording){els.status.textContent=({1:'Autorisation refusée',2:'Position indisponible',3:'Délai dépassé'})[err.code]||'Erreur GPS';stopRecording(false)}
+  },{enableHighAccuracy:true,maximumAge:1000,timeout:15000});
+}
+
 function primeCenter(){navigator.geolocation.getCurrentPosition(pos=>{currentPoint={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy};updateCurrentPositionVisual(currentPoint);map.easeTo({center:[currentPoint.lng,currentPoint.lat],zoom:17,duration:500});setStatus()},()=>{els.status.textContent='Position initiale indisponible'},{enableHighAccuracy:true,maximumAge:1000,timeout:10000})}
-function startTracking(){closeSheets();if(!navigator.geolocation||watchId!==null)return;if(!startTime)startTime=Date.now();if(!timer){updateDuration();timer=setInterval(updateDuration,1000)}els.status.textContent='Recherche GPS...';watchId=navigator.geolocation.watchPosition(pos=>{const p={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy,altitude:pos.coords.altitude,speed:pos.coords.speed,timestamp:pos.timestamp};currentPoint=p;const prev=route[route.length-1];if(prev){const step=hav(prev,p);if(step>=2)totalMeters+=step}route.push(p);updateMapPoint(p);updateStats(p);if(route.length===1 && !destination)map.easeTo({center:[p.lng,p.lat],zoom:17,duration:500});updateRec();setStatus()},err=>{els.status.textContent=({1:'Autorisation refusée',2:'Position indisponible',3:'Délai dépassé'})[err.code]||'Erreur GPS';pauseTracking(false)},{enableHighAccuracy:!!els.highAccuracy.checked,maximumAge:1000,timeout:15000});updateRec()}
-function pauseTracking(resetStatus=true){if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}if(timer){clearInterval(timer);timer=null}if(resetStatus)setStatus();updateRec()}
-function openStopModal(){if(!route.length){pauseTracking(true);return}els.recordName.value=defaultRecordName();els.stopModal.classList.add('open')}
-function confirmStop(){saveCurrentTrace(els.recordName.value.trim()||defaultRecordName());pauseTracking(false);route=[];totalMeters=0;startTime=null;updateDuration();els.speed.textContent='0';els.distance.textContent='0.00';els.altitude.textContent='---';els.accuracy.textContent='---';els.stopModal.classList.remove('open');if(map.getSource('trace-live'))map.getSource('trace-live').setData(traceGeo());renderTraceList();updateSavedTraceLayer();setStatus()}
-function clearTrack(){pauseTracking(false);route=[];totalMeters=0;startTime=null;updateDuration();els.speed.textContent='0';els.distance.textContent='0.00';els.altitude.textContent='---';els.accuracy.textContent='---';if(map.getSource('trace-live'))map.getSource('trace-live').setData(traceGeo());setStatus();closeSheets()}
+
+function startTracking(){
+  closeSheets();
+  if(!navigator.geolocation||isRecording)return;
+  isRecording=true;
+  if(!startTime)startTime=Date.now();
+  if(!timer){updateDuration();timer=setInterval(updateDuration,1000)}
+  startMasterWatch(); // no-op si déjà actif
+  updateRec();setStatus();
+}
+
+// v2.3b: stopRecording ne clearWatch plus — le watch GPS reste actif (dot toujours visible)
+function stopRecording(resetStatus=true){
+  isRecording=false;
+  if(timer){clearInterval(timer);timer=null}
+  if(resetStatus)setStatus();
+  updateRec();
+}
+
+function pauseTracking(resetStatus=true){stopRecording(resetStatus)}
+function openStopModal(){if(!route.length){stopRecording(true);return}els.recordName.value=defaultRecordName();els.stopModal.classList.add('open')}
+
+function confirmStop(){
+  saveCurrentTrace(els.recordName.value.trim()||defaultRecordName());
+  stopRecording(false);
+  route=[];liveGeoJSON.geometry.coordinates=[];totalMeters=0;startTime=null;updateDuration();
+  els.speed.textContent='0';els.distance.textContent='0.00';els.altitude.textContent='---';els.accuracy.textContent='---';
+  els.stopModal.classList.remove('open');
+  if(map.getSource('trace-live'))map.getSource('trace-live').setData(liveGeoJSON);
+  renderTraceList();updateSavedTraceLayer();setStatus();
+}
+
+function clearTrack(){
+  stopRecording(false);
+  route=[];liveGeoJSON.geometry.coordinates=[];totalMeters=0;startTime=null;updateDuration();
+  els.speed.textContent='0';els.distance.textContent='0.00';els.altitude.textContent='---';els.accuracy.textContent='---';
+  if(map.getSource('trace-live'))map.getSource('trace-live').setData(liveGeoJSON);
+  setStatus();closeSheets();
+}
+
 function locateMe(){autoCenter=!autoCenter;autoCenterInput.checked=autoCenter;updateLocateButton();if(autoCenter&&currentPoint&&!destination)map.easeTo({center:[currentPoint.lng,currentPoint.lat],duration:500});if(autoCenter&&destination)orientToDestination(true)}
 autoCenterInput.addEventListener('change',e=>{autoCenter=e.target.checked;updateLocateButton();if(autoCenter&&currentPoint&&!destination)map.easeTo({center:[currentPoint.lng,currentPoint.lat],duration:500});if(autoCenter&&destination)orientToDestination(true)});
 threeDInput.addEventListener('change',e=>enable3D(e.target.checked));
-document.getElementById('destBtn').onclick=()=>toggleSheet('dest');document.getElementById('searchDestBtn').onclick=searchDestination;document.getElementById('clearDestBtn').onclick=clearDestination;els.destInput.addEventListener('keydown',e=>{if(e.key==='Enter')searchDestination()});document.getElementById('playBtn').onclick=startTracking;document.getElementById('pauseBtn').onclick=()=>pauseTracking(true);document.getElementById('stopBtn').onclick=openStopModal;document.getElementById('traceBtn').onclick=()=>{renderTraceList();updateSavedTraceLayer();toggleSheet('traces')};document.getElementById('settingsBtn').onclick=()=>toggleSheet('settings');document.getElementById('mapsBtn').onclick=()=>toggleSheet('maps');document.getElementById('locateBtn').onclick=locateMe;document.getElementById('northBtn').onclick=()=>setNorthUp(!northUp);document.getElementById('closeSettingsBtn').onclick=closeSheets;document.getElementById('clearBtn').onclick=clearTrack;document.getElementById('cancelStopBtn').onclick=()=>els.stopModal.classList.remove('open');document.getElementById('confirmStopBtn').onclick=confirmStop;els.stopModal.onclick=e=>{if(e.target===els.stopModal)els.stopModal.classList.remove('open')};map.on('click',closeSheets);document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeSheets();els.stopModal.classList.remove('open')}});window.addEventListener('beforeunload',()=>{if(watchId!==null)navigator.geolocation.clearWatch(watchId);if(passiveWatchId!==null)navigator.geolocation.clearWatch(passiveWatchId);if(timer)clearInterval(timer)});
-map.on('load',()=>{ensureLayers();setBase(currentLayer in Object.fromEntries(sourcesMeta.map(x=>[x.key,1]))?currentLayer:'osm');renderLayers();renderColors();updateRec();updateLocateButton();updateNorthButton();renderTraceList();updateSavedTraceLayer();updateDestinationVisual();primeCenter();startPassiveWatch()});
+
+document.getElementById('destBtn').onclick=()=>toggleSheet('dest');
+document.getElementById('searchDestBtn').onclick=searchDestination;
+document.getElementById('clearDestBtn').onclick=clearDestination;
+els.destInput.addEventListener('keydown',e=>{if(e.key==='Enter')searchDestination()});
+document.getElementById('playBtn').onclick=startTracking;
+document.getElementById('pauseBtn').onclick=()=>pauseTracking(true);
+document.getElementById('stopBtn').onclick=openStopModal;
+document.getElementById('traceBtn').onclick=()=>{renderTraceList();updateSavedTraceLayer();toggleSheet('traces')};
+document.getElementById('settingsBtn').onclick=()=>toggleSheet('settings');
+document.getElementById('mapsBtn').onclick=()=>toggleSheet('maps');
+document.getElementById('locateBtn').onclick=locateMe;
+document.getElementById('northBtn').onclick=()=>setNorthUp(!northUp);
+document.getElementById('closeSettingsBtn').onclick=closeSheets;
+document.getElementById('clearBtn').onclick=clearTrack;
+document.getElementById('cancelStopBtn').onclick=()=>els.stopModal.classList.remove('open');
+document.getElementById('confirmStopBtn').onclick=confirmStop;
+els.stopModal.onclick=e=>{if(e.target===els.stopModal)els.stopModal.classList.remove('open')};
+map.on('click',closeSheets);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeSheets();els.stopModal.classList.remove('open')}});
+window.addEventListener('beforeunload',()=>{
+  if(masterWatchId!==null)navigator.geolocation.clearWatch(masterWatchId); // v2.3b: un seul clearWatch
+  if(timer)clearInterval(timer);
+});
+
+map.on('load',()=>{
+  ensureLayers();
+  setBase(currentLayer in Object.fromEntries(sourcesMeta.map(x=>[x.key,1]))?currentLayer:'osm');
+  renderLayers();renderColors();updateRec();updateLocateButton();updateNorthButton();
+  renderTraceList();updateSavedTraceLayer();updateDestinationVisual();
+  primeCenter();
+  startMasterWatch(); // v2.3b: remplace startPassiveWatch
+});
 </script>
+
 </body>
 </html>
