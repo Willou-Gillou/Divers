@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bonhomme V2 OpenRouter Audio</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: #f5f7fb;
+      color: #111827;
+    }
+    .app {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .card {
+      background: white;
+      border: 1px solid #dbe3ef;
+      border-radius: 18px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 10px 24px rgba(17,24,39,0.06);
+    }
+    .top {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .field {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    input, select, textarea, button {
+      font: inherit;
+    }
+    input, textarea {
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #cfd8e3;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    .avatar-wrap {
+      display: grid;
+      place-items: center;
+      padding: 20px 0;
+    }
+    .avatar {
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 30%, #a5f3fc, #06b6d4 60%, #0f766e);
+      position: relative;
+      box-shadow: 0 24px 50px rgba(8,145,178,0.18);
+      transition: transform .2s ease;
+    }
+    .avatar.listening { transform: scale(1.02); }
+    .avatar.speaking { transform: scale(1.04); }
+    .eye {
+      position: absolute;
+      top: 78px;
+      width: 18px;
+      height: 24px;
+      border-radius: 999px;
+      background: #fff;
+    }
+    .eye.left { left: 66px; }
+    .eye.right { right: 66px; }
+    .mouth {
+      position: absolute;
+      left: 50%;
+      bottom: 58px;
+      transform: translateX(-50%);
+      width: 58px;
+      height: 16px;
+      border-radius: 0 0 999px 999px;
+      background: #0f172a;
+      transition: height .15s ease;
+    }
+    .avatar.speaking .mouth { height: 28px; }
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .primary {
+      background: #0f766e;
+      color: white;
+    }
+    .secondary {
+      background: #e6f6f5;
+      color: #0f766e;
+    }
+    .danger {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .status {
+      font-size: 14px;
+      color: #475569;
+    }
+    .bubble {
+      padding: 14px;
+      border-radius: 14px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      min-height: 48px;
+    }
+    .log {
+      display: grid;
+      gap: 10px;
+      max-height: 280px;
+      overflow: auto;
+    }
+    .msg {
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid #dbe3ef;
+      background: #fff;
+    }
+    .msg.user {
+      background: #ecfeff;
+      border-color: #a5f3fc;
+    }
+    .meta {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    @media (max-width: 720px) {
+      .top { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>Bonhomme V2 OpenRouter Audio</h1>
+      <p class="status" id="status">Prêt.</p>
+      <div class="top">
+        <div>
+          <div class="field">
+            <label>Clé OpenRouter</label>
+            <input id="apiKey" type="password" placeholder="sk-or-..." />
+          </div>
+          <div class="field">
+            <label>Modèle</label>
+            <input id="model" value="openai/gpt-audio" />
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <label>Prompt système</label>
+            <textarea id="systemPrompt">Tu es un petit bonhomme bienveillant. Tu réponds en français, naturellement, avec des phrases courtes. Ta voix doit sembler chaleureuse et simple.</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="avatar-wrap">
+        <div class="avatar" id="avatar">
+          <div class="eye left"></div>
+          <div class="eye right"></div>
+          <div class="mouth"></div>
+        </div>
+      </div>
+      <div class="bubble" id="bubble">Bonjour, appuie sur “Parler” puis sur “Stop micro”.</div>
+      <div style="height:12px"></div>
+      <div class="row">
+        <button class="primary" id="recordBtn">🎤 Parler</button>
+        <button class="secondary" id="stopBtn">⏹️ Stop micro</button>
+        <button class="secondary" id="testBtn">🔊 Tester audio</button>
+        <button class="danger" id="clearBtn">♻️ Vider</button>
+      </div>
+      <div style="height:12px"></div>
+      <audio id="player" controls style="width:100%"></audio>
+    </div>
+
+    <div class="card">
+      <h3>Conversation</h3>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <script>
+    const storageKeys = {
+      apiKey: "bonhomme_v2_or_apiKey",
+      model: "bonhomme_v2_or_model",
+      systemPrompt: "bonhomme_v2_or_systemPrompt"
+    };
+
+    const el = (id) => document.getElementById(id);
+    const apiKeyEl = el("apiKey");
+    const modelEl = el("model");
+    const systemPromptEl = el("systemPrompt");
+    const recordBtn = el("recordBtn");
+    const stopBtn = el("stopBtn");
+    const testBtn = el("testBtn");
+    const clearBtn = el("clearBtn");
+    const bubble = el("bubble");
+    const statusEl = el("status");
+    const avatar = el("avatar");
+    const logEl = el("log");
+    const player = el("player");
+
+    let mediaRecorder = null;
+    let stream = null;
+    let chunks = [];
+    let isRecording = false;
+    let audioContext = null;
+    let conversation = [];
+
+    apiKeyEl.value = localStorage.getItem(storageKeys.apiKey) || "";
+    modelEl.value = localStorage.getItem(storageKeys.model) || "openai/gpt-audio";
+    systemPromptEl.value = localStorage.getItem(storageKeys.systemPrompt) || systemPromptEl.value;
+
+    apiKeyEl.addEventListener("input", () => localStorage.setItem(storageKeys.apiKey, apiKeyEl.value));
+    modelEl.addEventListener("input", () => localStorage.setItem(storageKeys.model, modelEl.value));
+    systemPromptEl.addEventListener("input", () => localStorage.setItem(storageKeys.systemPrompt, systemPromptEl.value));
+
+    function setStatus(text, mode = "") {
+      statusEl.textContent = text;
+      avatar.classList.remove("listening", "speaking");
+      if (mode) avatar.classList.add(mode);
+    }
+
+    function addMsg(role, text) {
+      conversation.push({ role, text, time: new Date().toLocaleTimeString("fr-FR", {hour: "2-digit", minute: "2-digit"}) });
+      renderLog();
+    }
+
+    function renderLog() {
+      logEl.innerHTML = "";
+      for (const msg of conversation) {
+        const div = document.createElement("div");
+        div.className = "msg " + (msg.role === "user" ? "user" : "");
+        div.innerHTML = `
+          <div class="meta">${msg.role === "user" ? "Toi" : "Bonhomme"} • ${msg.time}</div>
+          <div>${escapeHtml(msg.text)}</div>
+        `;
+        logEl.appendChild(div);
+      }
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function pickMimeType() {
+      const candidates = [
+        "audio/webm;codecs=opus",
+        "audio/mp4",
+        "audio/webm",
+        "audio/ogg;codecs=opus"
+      ];
+      for (const type of candidates) {
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported(type)) return type;
+      }
+      return "";
+    }
+
+    function formatFromMimeType(mimeType) {
+      if (mimeType.includes("mp4")) return "mp4";
+      if (mimeType.includes("ogg")) return "ogg";
+      return "webm";
+    }
+
+    async function startRecording() {
+      if (isRecording) return;
+      try {
+        chunks = [];
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = pickMimeType();
+        mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+          const actualMime = mediaRecorder.mimeType || mimeType || "audio/webm";
+          const blob = new Blob(chunks, { type: actualMime });
+          await sendAudioToOpenRouter(blob, formatFromMimeType(actualMime));
+          if (stream) {
+            stream.getTracks().forEach(t => t.stop());
+            stream = null;
+          }
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        bubble.textContent = "Je t’écoute…";
+        setStatus("En écoute…", "listening");
+      } catch (err) {
+        bubble.textContent = "Impossible d’accéder au micro.";
+        setStatus("Erreur micro");
+      }
+    }
+
+    function stopRecording() {
+      if (!mediaRecorder || !isRecording) return;
+      mediaRecorder.stop();
+      isRecording = false;
+      setStatus("Envoi audio…");
+      bubble.textContent = "J’analyse ta phrase…";
+    }
+
+    async function blobToBase64(blob) {
+      const buffer = await blob.arrayBuffer();
+      let binary = "";
+      const bytes = new Uint8Array(buffer);
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      return btoa(binary);
+    }
+
+    function decodeBase64ToUint8Array(base64) {
+      const binary = atob(base64);
+      const len = binary.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+
+    async function playWavBase64(base64Data) {
+      const bytes = decodeBase64ToUint8Array(base64Data);
+      const blob = new Blob([bytes], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
+      player.src = url;
+      player.play().catch(() => {});
+    }
+
+    async function sendAudioToOpenRouter(blob, format) {
+      const apiKey = apiKeyEl.value.trim();
+      const model = modelEl.value.trim();
+      const systemPrompt = systemPromptEl.value.trim();
+
+      if (!apiKey) {
+        bubble.textContent = "Ajoute d’abord ta clé OpenRouter.";
+        setStatus("Clé manquante");
+        return;
+      }
+
+      const audioB64 = await blobToBase64(blob);
+
+      const body = {
+        model,
+        modalities: ["text", "audio"],
+        audio: {
+          voice: "alloy",
+          format: "wav"
+        },
+        stream: true,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...conversation.slice(-6).map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.text })),
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Écoute mon audio et réponds naturellement en français." },
+              { type: "input_audio", input_audio: { data: audioB64, format } }
+            ]
+          }
+        ]
+      };
+
+      try {
+        setStatus("Réponse en cours…");
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": location.href,
+            "X-Title": "Bonhomme V2 OpenRouter Audio"
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!response.ok || !response.body) {
+          const text = await response.text();
+          throw new Error(text || `HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        let buffer = "";
+        let replyText = "";
+        let audioOutB64 = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() || "";
+
+          for (const part of parts) {
+            const lines = part.split("\n").filter(line => line.startsWith("data: "));
+            for (const line of lines) {
+              const data = line.slice(6).trim();
+              if (!data || data === "[DONE]") continue;
+
+              let json;
+              try {
+                json = JSON.parse(data);
+              } catch {
+                continue;
+              }
+
+              const delta = json.choices?.[0]?.delta || {};
+              const audio = delta.audio || {};
+
+              if (audio.transcript) {
+                replyText += audio.transcript;
+                bubble.textContent = replyText;
+              }
+
+              if (audio.data) {
+                audioOutB64 += audio.data;
+              }
+
+              if (typeof delta.content === "string") {
+                replyText += delta.content;
+                bubble.textContent = replyText;
+              }
+            }
+          }
+
+          if (done) break;
+        }
+
+        if (!replyText.trim()) replyText = "Réponse reçue.";
+        addMsg("assistant", replyText);
+        setStatus("Je parle…", "speaking");
+
+        if (audioOutB64) {
+          await playWavBase64(audioOutB64);
+        }
+
+        player.onended = () => setStatus("Prêt.");
+        bubble.textContent = replyText;
+      } catch (err) {
+        console.error(err);
+        bubble.textContent = "Erreur OpenRouter : " + String(err.message).slice(0, 220);
+        setStatus("Erreur API");
+      }
+    }
+
+    testBtn.addEventListener("click", async () => {
+      try {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === "suspended") await audioContext.resume();
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        gain.gain.value = 0.03;
+        osc.frequency.value = 660;
+        osc.start();
+        setTimeout(() => {
+          osc.stop();
+          bubble.textContent = "Audio local OK.";
+        }, 180);
+      } catch {
+        bubble.textContent = "Impossible de tester l’audio local.";
+      }
+    });
+
+    recordBtn.addEventListener("click", startRecording);
+    stopBtn.addEventListener("click", stopRecording);
+    clearBtn.addEventListener("click", () => {
+      conversation = [];
+      renderLog();
+      bubble.textContent = "Conversation vidée.";
+      setStatus("Prêt.");
+      player.pause();
+      player.removeAttribute("src");
+      player.load();
+    });
+
+    addMsg("assistant", "Bonjour, je suis prêt. Appuie sur Parler, puis sur Stop micro.");
+  </script>
+</body>
+</html>
