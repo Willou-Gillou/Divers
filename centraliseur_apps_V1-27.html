@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>centraliseur_apps_V1-26b-SECURE.html</title>
+  <title>centraliseur_apps_V1-27-SECURE.html</title>
   <style>
     :root{
       --bg1:#0b1126;--bg2:#16203c;--glass:rgba(22,30,58,.65);--line:rgba(255,255,255,.08);--text:#f5f8ff;--muted:#aab7d7;
@@ -52,7 +52,7 @@
     .apps-panel{display:flex;flex-direction:column;flex:1;min-height:0;margin-bottom:0}
     .toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;flex-shrink:0}
     .toolbar-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .pill-btn{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--blue);cursor:pointer;transition:.2s;padding:0;min-height:0;}
+    .pill-btn{min-width:32px;height:32px;padding:0 8px;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--blue);cursor:pointer;transition:.2s;padding:0;min-height:0;}
     .pill-btn:hover{background:rgba(255,255,255,.1)}
     .pill-btn svg{width:16px;height:16px}
     .fit{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;position:relative;margin-top:12px;padding-right:4px;scroll-behavior:auto}
@@ -98,7 +98,7 @@
     <div class="sticky">
       <div class="sticky-inner">
         <div class="status glass"><span id="statusDot" class="dot orange"></span><div id="statusText" class="status-text">En attente.</div></div>
-        <div class="header-badge">V1-26b</div>
+        <div class="header-badge">V1-27</div>
       </div>
     </div>
 
@@ -145,6 +145,10 @@
       <div class="toolbar">
         <h2>Mes apps</h2>
         <div class="toolbar-actions">
+<button id="btnRescanGithub" class="pill-btn" title="Rescanner GitHub">GH</button>
+<button id="btnRescanHf" class="pill-btn" title="Rescanner Hugging Face">HF</button>
+<button id="btnRescanKoyeb" class="pill-btn" title="Rescanner Koyeb">KY</button>
+
           <button id="btnRescan" class="pill-btn" title="Rescanner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button><button id="btnRefreshVersions" class="pill-btn warn" title="Actualiser versions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></button>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
           </button>
@@ -165,7 +169,7 @@
   </div>
 
   <script>
-    const APP_VERSION = 'V1-26b';
+    const APP_VERSION = 'V1-27';
     const PROFILE_STORAGE_KEY = 'centraliseur-apps-profiles';
     const DATA_STORAGE_KEY = 'centraliseur-apps-data';
     const UI_STORAGE_KEY = 'centraliseur-apps-ui';
@@ -202,6 +206,9 @@
       emptyState: document.getElementById('emptyState'),
       countLabel: document.getElementById('countLabel'),
       btnRescan: document.getElementById('btnRescan'),
+      btnRescanGithub: document.getElementById('btnRescanGithub'),
+      btnRescanHf: document.getElementById('btnRescanHf'),
+      btnRescanKoyeb: document.getElementById('btnRescanKoyeb'),
       btnCollapseAll: document.getElementById('btnCollapseAll'),
       btnScrollTop: document.getElementById('btnScrollTop'),
       fitWrap: document.getElementById('fitWrap'),
@@ -209,7 +216,34 @@
 
     init();
 
-    function init(){
+    
+function loadLegacyProfilesAnyVersion(){
+  try{
+    const prefixes = ['centraliseur-apps-profiles'];
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(!k) continue;
+      if(prefixes.some(p => k.startsWith(p))){
+        const raw = localStorage.getItem(k);
+        if(!raw) continue;
+        const data = JSON.parse(raw);
+        if(data && (data.koyebUrls || data.githubProfiles || data.hfProfiles)) return data;
+      }
+    }
+  }catch(e){}
+  return null;
+}
+function mergeProfilesFromStorage(data){
+  if(!data || typeof data !== 'object') return;
+  if(Array.isArray(data.githubProfiles)) state.githubProfiles = data.githubProfiles;
+  if(Array.isArray(data.hfProfiles)) state.hfProfiles = data.hfProfiles;
+  if(typeof data.githubToken === 'string') state.githubToken = data.githubToken;
+  if(typeof data.koyebUrls === 'string') state.koyebUrls = data.koyebUrls;
+  if(typeof data.koyebToken === 'string') state.koyebToken = data.koyebToken;
+  if(typeof data.koyebProxyUrl === 'string') state.koyebProxyUrl = data.koyebProxyUrl;
+}
+
+function init(){
 
   document.getElementById('copyUrlBtn').addEventListener('click', function(){
     const url = window.location.href;
@@ -238,6 +272,9 @@
       el.clearBtn.addEventListener('click', clearProfiles);
       el.clearDataBtn.addEventListener('click', clearAppData);
       el.btnRescan.addEventListener('click', scanAll);
+      el.btnRescanGithub?.addEventListener('click', scanGithubOnly);
+      el.btnRescanHf?.addEventListener('click', scanHfOnly);
+      el.btnRescanKoyeb?.addEventListener('click', scanKoyebOnly);
       el.btnCollapseAll.addEventListener('click', () => { state.expandedItems = {}; saveUi(); renderList(); });
       el.btnScrollTop.addEventListener('click', () => { el.fitWrap.scrollTo({ top:0, behavior:'smooth' }); window.scrollTo({ top:0, behavior:'smooth' }); });
       el.sourcesHead.addEventListener('click', function(e){ e.stopPropagation(); if(e.target.closest('button') || e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA') return; state.sourcesCollapsed = !state.sourcesCollapsed; renderSourcesPanel(); saveUi(); });
@@ -298,33 +335,33 @@
       state.githubProfiles = parseProfiles(el.githubProfiles.value);
       state.hfProfiles = parseProfiles(el.hfProfiles.value);
       state.githubToken = String(el.githubToken.value || '');
-      state.koyebUrls = String(el.koyebUrls.value || '');
-      state.koyebToken = String(el.koyebToken.value || '');
-      state.koyebProxyUrl = String(el.koyebProxyUrl.value || '/api/koyeb/apps');
-      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({ version: APP_VERSION, githubProfiles: state.githubProfiles, hfProfiles: state.hfProfiles, githubToken: state.githubToken, koyebToken: state.koyebToken, koyebProxyUrl: state.koyebProxyUrl }));
+      state.koyebUrls = String(el.koyebUrls?.value || '');
+      state.koyebToken = String(el.koyebToken?.value || '');
+      state.koyebProxyUrl = String(el.koyebProxyUrl?.value || '');
+      localStorage.setItem(PROFILESTORAGEKEY, JSON.stringify({
+        githubProfiles: state.githubProfiles,
+        hfProfiles: state.hfProfiles,
+        githubToken: state.githubToken,
+        koyebUrls: state.koyebUrls,
+        koyebToken: state.koyebToken,
+        koyebProxyUrl: state.koyebProxyUrl
+      }));
       updateSourcesPill();
-      setStatus('green', 'Profils sauvegardés localement.');
+      setStatus('green','Profils sauvegardés localement.');
     }
     function saveAppData(){ localStorage.setItem(DATA_STORAGE_KEY, JSON.stringify({ version: APP_VERSION, githubApps: state.githubApps, hfApps: state.hfApps, koyebApps: state.koyebApps, savedAt: new Date().toISOString() })); }
     function saveUi(){ localStorage.setItem(UI_STORAGE_KEY, JSON.stringify({ debugOpen: state.debugOpen, sourcesCollapsed: state.sourcesCollapsed, expandedItems: state.expandedItems })); }
-    function loadProfiles(){ try{ const raw = localStorage.getItem(PROFILE_STORAGE_KEY); if(!raw) return; const data = JSON.parse(raw); state.githubProfiles = Array.isArray(data.githubProfiles) ? data.githubProfiles : []; state.hfProfiles = Array.isArray(data.hfProfiles) ? data.hfProfiles : []; state.githubToken = String(data.githubToken || ''); state.koyebUrls = String(data.koyebUrls || ''); state.koyebToken = String(data.koyebToken || ''); state.koyebProxyUrl = String(data.koyebProxyUrl || '/api/koyeb/apps'); }catch(_){} }
-    function loadAppData(){ try{ const raw = localStorage.getItem(DATA_STORAGE_KEY); if(!raw) return; const data = JSON.parse(raw); state.githubApps = Array.isArray(data.githubApps) ? data.githubApps : []; state.hfApps = Array.isArray(data.hfApps) ? data.hfApps : []; state.koyebApps = Array.isArray(data.koyebApps) ? data.koyebApps : []; }catch(_){} }
-    function loadUi(){ try{ const raw = localStorage.getItem(UI_STORAGE_KEY); if(!raw) return; const data = JSON.parse(raw); state.debugOpen = !!data.debugOpen; state.sourcesCollapsed = !!data.sourcesCollapsed; state.expandedItems = data.expandedItems || {}; }catch(_){} }
-    function clearProfiles(){ state.githubProfiles=[]; state.hfProfiles=[]; state.githubToken=''; state.koyebUrls=''; state.koyebToken=''; state.koyebProxyUrl='/api/koyeb/apps'; localStorage.removeItem(PROFILE_STORAGE_KEY); hydrate(); setStatus('orange','Profils effacés.'); }
-    function clearAppData(){ localStorage.removeItem(DATA_STORAGE_KEY); state.githubApps=[]; state.hfApps=[]; state.koyebApps=[]; state.expandedItems={}; saveUi(); renderList(); setStatus('orange','Données app supprimées du LocalStorage.'); }
-    function getGitHubHeaders(){ const headers={ 'Accept':'application/vnd.github+json' }; const token=(el.githubToken.value||'').trim(); if(token) headers['Authorization']=`Bearer ${token}`; return headers; }
-
-    async function fetchJson(url, options={}){ const res = await fetch(url, options); if(!res.ok){ let details=''; try{ details = await res.text(); }catch{} throw new Error(`HTTP ${res.status} - ${url}${details ? ' - ' + details.slice(0, 240) : ''}`); } return res.json(); }
-    async function fetchJsonSafe(url, options={}){ try{ const res = await fetch(url, options); if(!res.ok) return null; return await res.json(); }catch{return null;} }
-    async function bestEffortCheck(url, timeoutMs=5000){ const controller = new AbortController(); const timer=setTimeout(()=>controller.abort(), timeoutMs); try{ await fetch(url,{method:'GET',mode:'no-cors',cache:'no-store',signal:controller.signal}); clearTimeout(timer); return true; }catch{ clearTimeout(timer); return false; } }
-
-    async function getGitHubAccount(owner){ return fetchJson(`https://api.github.com/users/${encodeURIComponent(owner)}`, { headers:getGitHubHeaders() }); }
-    async function listGitHubRepos(owner){
-      const account = await getGitHubAccount(owner);
-      const baseUrl = account.type === 'Organization' ? `https://api.github.com/orgs/${encodeURIComponent(owner)}/repos` : `https://api.github.com/users/${encodeURIComponent(owner)}/repos`;
-      let page=1; const perPage=100; const all=[];
-      while(page<=5){ const url=`${baseUrl}?per_page=${perPage}&page=${page}&sort=pushed&direction=desc`; const rows=await fetchJson(url,{ headers:getGitHubHeaders() }); all.push(...rows); if(!Array.isArray(rows)||rows.length<perPage) break; page += 1; }
-      return all;
+    function loadProfiles(){
+      try{
+        const raw = localStorage.getItem(PROFILESTORAGEKEY);
+        if(raw){
+          mergeProfilesFromStorage(JSON.parse(raw));
+        } else {
+          mergeProfilesFromStorage(loadLegacyProfilesAnyVersion());
+        }
+      }catch(e){
+        try{ mergeProfilesFromStorage(loadLegacyProfilesAnyVersion()); }catch(_e){}
+      }
     }
     function isSpecialPagesRepo(owner, repoName){ return repoName.toLowerCase() === `${owner}`.toLowerCase() + '.github.io'; }
     function isGitHubPagesCandidate(owner, repo){ if(repo.fork || repo.private || repo.archived || repo.disabled) return false; if(isSpecialPagesRepo(owner, repo.name)) return true; if(repo.has_pages) return true; if(repo.homepage && /github\.io/i.test(repo.homepage)) return true; return false; }
@@ -357,7 +394,27 @@
     function toHfSubdomain(author, name){ return `${author}-${name}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''); }
     function buildHfPublicUrl(spaceId, info={}, listedSpace={}){ const [author, ...rest]=String(spaceId).split('/'); const name=rest.join('/'); const customDomain = info?.customDomain || info?.custom_domain || listedSpace?.customDomain || listedSpace?.custom_domain || info?.domain || listedSpace?.domain; if(customDomain) return /^https?:\/\//i.test(customDomain) ? customDomain : `https://${customDomain}`; const host = info?.host || info?.spaceHost || info?.runtime?.host || listedSpace?.host || listedSpace?.spaceHost; if(host) return /^https?:\/\//i.test(host) ? host : `https://${host}`; return `https://${toHfSubdomain(author, name)}.hf.space`; }
     function buildHfApiUrl(spaceId){ const [author, ...rest]=String(spaceId).split('/'); const name=rest.join('/'); return `https://huggingface.co/api/spaces/${encodeURIComponent(author)}/${encodeURIComponent(name)}`; }
-    function extractHfVersion(info, listedSpace){ const candidates=[info?.cardData?.version, info?.cardData?.app_version, info?.version, listedSpace?.cardData?.version, listedSpace?.version].filter(Boolean); if(candidates.length) return String(candidates[0]); const sha=info?.sha || listedSpace?.sha; if(sha) return String(sha).slice(0,7); return '—'; }
+    
+async function fetchHfLatestCommitMessage(spaceId){
+  try{
+    const url = `https://huggingface.co/spaces/${spaceId}/commits/main`;
+    const res = await fetch(url, { cache:'no-store' });
+    if(!res.ok) return null;
+    const html = await res.text();
+    const patterns = [
+      /commit-title[^>]*>([^<]{3,120})</i,
+      /TimelineItem-body[^>]*>([^<]{3,120})</i,
+      /<title>Commits · ([^<]+)<\/title>/i
+    ];
+    for(const rx of patterns){
+      const m = html.match(rx);
+      if(m?.[1]) return String(m[1]).trim();
+    }
+  }catch(e){}
+  return null;
+}
+
+function extractHfVersion(info, listedSpace){ const candidates=[info?.cardData?.version, info?.cardData?.app_version, info?.version, listedSpace?.cardData?.version, listedSpace?.version].filter(Boolean); if(candidates.length) return String(candidates[0]); const sha=info?.sha || listedSpace?.sha; if(sha) return String(sha).slice(0,7); return '—'; }
     function resolveHfStatus(info){ const stage=String(info?.runtime?.stage || info?.stage || '').toUpperCase(); if(!stage) return null; if(['RUNNING','BUILDING','STARTING','PREPARING'].includes(stage)) return true; if(['PAUSED','STOPPED','FAILED','ERROR','SLEEPING','SLEEP','RUNTIME_ERROR'].includes(stage)) return false; return null; }
     async function scanHfAuthor(author){ const spaces=await listHfSpaces(author); const rows=[]; for(const space of spaces){ try{ const normalized=normalizeHfSpace(space, author); if(!normalized.id || !normalized.author || !normalized.name) continue; const info=await fetchJsonSafe(buildHfApiUrl(normalized.id)); const link=buildHfPublicUrl(normalized.id, info, space); let status=resolveHfStatus(info); if(status===null) status = await bestEffortCheck(link); rows.push({ key:`hf::${link}`, source:'hf', owner:normalized.author, ownerLabel:normalized.author, name:normalized.name, version:extractHfVersion(info, space), updatedAt:info?.lastModified || space?.lastModified || info?.last_modified || null, link, metaUrl:buildHfRepoUrl(normalized.id), sourceInfo:normalized.id, status }); }catch(e){ console.error(e); } } return rows; }
     function dedupeRows(rows){ const map=new Map(); for(const row of rows){ const key=row.key || `${row.source}::${row.link}`; if(!map.has(key)) map.set(key,row); } return [...map.values()]; }
@@ -458,7 +515,71 @@
       return rows;
     }
 
-    async function scanAll(){
+    
+async function scanGithubOnly(){
+  saveProfiles();
+  const githubProfiles = parseProfiles(el.githubProfiles.value);
+  state.githubApps = [];
+  renderList();
+  if(!githubProfiles.length){ setStatus('red','Ajoute au moins une source GitHub.'); return; }
+  setStatus('orange','Scan GitHub en cours...');
+  const githubApps = [];
+  const errors = [];
+  for(let i=0;i<githubProfiles.length;i++){
+    const owner = githubProfiles[i];
+    try{
+      const result = await scanGitHubOwner(owner);
+      githubApps.push(...result.rows);
+      errors.push(...result.errors.map(e => `GitHub repo ${e}`));
+      state.githubApps = sortRows(dedupeRows(githubApps));
+      renderList();
+    }catch(e){ errors.push(`GitHub profil ${owner}`); }
+  }
+  state.githubApps = sortRows(dedupeRows(githubApps));
+  saveAppData(); saveUi(); renderList();
+  setStatus(errors.length ? 'orange' : 'green', errors.length ? 'Scan GitHub terminé avec erreurs partielles.' : 'GitHub synchronisé avec succès.');
+}
+async function scanHfOnly(){
+  saveProfiles();
+  const hfProfiles = parseProfiles(el.hfProfiles.value);
+  state.hfApps = [];
+  renderList();
+  if(!hfProfiles.length){ setStatus('red','Ajoute au moins une source Hugging Face.'); return; }
+  setStatus('orange','Scan Hugging Face en cours...');
+  const hfApps = [];
+  const errors = [];
+  for(let i=0;i<hfProfiles.length;i++){
+    const author = hfProfiles[i];
+    try{
+      const rows = await scanHfAuthor(author);
+      hfApps.push(...rows);
+      state.hfApps = sortRows(dedupeRows(hfApps));
+      renderList();
+    }catch(e){ errors.push(`Hugging Face ${author}`); }
+  }
+  state.hfApps = sortRows(dedupeRows(hfApps));
+  saveAppData(); saveUi(); renderList();
+  setStatus(errors.length ? 'orange' : 'green', errors.length ? 'Scan HF terminé avec erreurs partielles.' : 'Hugging Face synchronisé avec succès.');
+}
+async function scanKoyebOnly(){
+  saveProfiles();
+  state.koyebApps = [];
+  renderList();
+  const hasKoyeb = !!(el.koyebToken?.value.trim() || el.koyebUrls?.value.trim());
+  if(!hasKoyeb){ setStatus('red','Ajoute au moins une URL Koyeb.'); return; }
+  setStatus('orange','Scan Koyeb en cours...');
+  try{
+    const rows = await scanKoyeb();
+    state.koyebApps = sortRows(dedupeRows(rows));
+    saveAppData(); saveUi(); renderList();
+    setStatus(rows.length ? 'green' : 'orange', rows.length ? 'Koyeb synchronisé avec succès.' : 'Aucune app Koyeb détectée.');
+  }catch(e){
+    saveAppData(); saveUi(); renderList();
+    setStatus('red','Koyeb erreur de scan.');
+  }
+}
+
+async function scanAll(){
       saveProfiles();
       const githubProfiles=parseProfiles(el.githubProfiles.value); const hfProfiles=parseProfiles(el.hfProfiles.value);
       state.githubApps=[]; state.hfApps=[]; state.koyebApps=[]; state.expandedItems={}; renderList();
