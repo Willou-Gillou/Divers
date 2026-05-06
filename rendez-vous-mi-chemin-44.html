@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rendez-vous à mi-chemin - v44</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg:#0e0f13; --surface:#16181f; --surface2:#1e2029;
+  --border:rgba(255,255,255,0.07);
+  --accent:#e8c97a; --accent2:#7ab8e8; --accent3:#e87a9a;
+  --green:#52c97a;
+  --text:#f0ede8; --text-muted:rgba(240,237,232,0.45);
+  --panel:360px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100dvh;display:flex;flex-direction:column;overflow:hidden;}
+
+/* HEADER */
+header{display:flex;align-items:center;gap:14px;padding:14px 22px;background:var(--surface);border-bottom:1px solid var(--border);z-index:1000;flex-shrink:0;}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent3));border-radius:10px;display:grid;place-items:center;font-size:18px;}
+.logo-text h1{font-family:'Playfair Display',serif;font-size:17px;font-weight:600;letter-spacing:-0.3px;line-height:1;}
+.logo-text p{font-size:11px;color:var(--text-muted);margin-top:2px;letter-spacing:0.5px;text-transform:uppercase;}
+
+/* LAYOUT */
+.app-body{flex:1;display:flex;overflow:hidden;}
+
+/* PANEL */
+.panel{width:var(--panel);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;z-index:100;}
+.panel-section{padding:20px;border-bottom:1px solid var(--border);}
+.section-label{font-size:10px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:14px;}
+
+/* INPUTS */
+.friend-block{margin-bottom:14px;}
+.friend-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.friend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.dot-a{background:var(--accent);}.dot-b{background:var(--accent2);}
+.friend-name{font-size:13px;font-weight:500;}
+.input-wrap{position:relative;}
+.input-wrap input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 40px 11px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s;}
+.input-wrap input:focus{border-color:rgba(255,255,255,0.2);}
+.input-wrap input::placeholder{color:var(--text-muted);}
+.input-clear{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;display:none;}
+.input-wrap input:not(:placeholder-shown)+.input-clear{display:block;}
+
+/* BUTTON */
+.btn-cta{width:100%;padding:13px;background:linear-gradient(135deg,var(--accent),#d4a855);color:#0e0f13;border:none;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s,transform .15s;margin-top:6px;}
+.btn-cta:hover{opacity:.9;transform:translateY(-1px);}
+.btn-cta:active{transform:translateY(0);}
+.btn-cta:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+
+/* TOGGLES */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.toggle-label{font-size:13px;color:var(--text-muted);display:flex;align-items:center;gap:8px;}
+.toggle-label .icon{font-size:15px;}
+.toggle{position:relative;width:42px;height:24px;}
+.toggle input{display:none;}
+.toggle-track{position:absolute;inset:0;background:var(--surface2);border:1px solid var(--border);border-radius:999px;cursor:pointer;transition:background .2s;}
+.toggle-track::after{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:var(--text-muted);top:2px;left:2px;transition:transform .2s,background .2s;}
+.toggle input:checked+.toggle-track{background:rgba(82,201,122,0.2);border-color:var(--green);}
+.toggle input:checked+.toggle-track::after{transform:translateX(18px);background:var(--green);}
+.toggle.blue input:checked+.toggle-track{background:rgba(122,184,232,0.2);border-color:var(--accent2);}
+.toggle.blue input:checked+.toggle-track::after{background:var(--accent2);}
+
+/* PROGRESS */
+.progress-wrap{padding:16px 20px;display:none;}
+.progress-wrap.active{display:block;}
+.progress-title{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px;}
+.progress-step{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-muted);margin-bottom:9px;transition:color .3s;}
+.progress-step .pdot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.1);flex-shrink:0;transition:background .3s;}
+.progress-step.s-active{color:var(--text);}
+.progress-step.s-active .pdot{background:var(--accent);animation:blink 1s ease-in-out infinite;}
+.progress-step.s-done{color:rgba(240,237,232,0.55);}
+.progress-step.s-done .pdot{background:var(--green);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* RESULTS */
+.results-block{display:none;}
+.results-block.visible{display:block;}
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px;}
+.stat-card{background:var(--surface2);border-radius:12px;padding:14px;border:1px solid var(--border);}
+.stat-label{font-size:10px;color:var(--text-muted);letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px;}
+.stat-value{font-size:21px;font-family:'Playfair Display',serif;font-weight:600;}
+.stat-unit{font-size:12px;color:var(--text-muted);margin-left:2px;font-family:'DM Sans',sans-serif;}
+.stat-card.ca .stat-value{color:var(--accent);}
+.stat-card.cb .stat-value{color:var(--accent2);}
+.meet-card{background:linear-gradient(135deg,rgba(82,201,122,0.1),rgba(82,201,122,0.04));border:1px solid rgba(82,201,122,0.3);border-radius:14px;padding:16px;margin-top:10px;}
+.meet-card .mc-label{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--green);margin-bottom:6px;}
+.meet-card .mc-value{font-size:15px;font-weight:500;line-height:1.4;}
+.meet-card .mc-sub{font-size:12px;color:var(--text-muted);margin-top:4px;}
+.legend{margin-top:14px;}
+.legend-item{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px;color:var(--text-muted);}
+.lswatch{width:26px;height:14px;border-radius:3px;flex-shrink:0;}
+.lswatch.gh{background:rgba(0,0,0,0.10);border:2px solid #333;border-radius:3px;}
+.lswatch.bd{height:0;border-top:2px dashed var(--accent2);border-radius:0;}
+
+/* ERROR */
+.error-msg{display:none;background:rgba(232,122,154,0.12);border:1px solid rgba(232,122,154,0.3);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--accent3);margin-top:8px;}
+.error-msg.visible{display:block;}
+
+/* MAP */
+#map{flex:1;background:#0a0c10;}
+
+/* MOBILE */
+@media(max-width:680px){
+  .app-body{flex-direction:column-reverse;}
+  .panel{width:100%;height:auto;max-height:58dvh;border-right:none;border-top:1px solid var(--border);}
+  #map{height:42dvh;flex:none;}
+}
+
+/* LEAFLET overrides */
+.leaflet-control-zoom{border:1px solid var(--border)!important;border-radius:10px!important;overflow:hidden;}
+.leaflet-control-zoom a{background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important;}
+.leaflet-control-zoom a:hover{background:var(--surface2)!important;}
+.leaflet-popup-content-wrapper{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.6);font-family:'DM Sans',sans-serif;font-size:13px;}
+.leaflet-popup-tip{background:var(--surface);}
+.leaflet-popup-close-button{color:var(--text-muted)!important;}
+.coming-soon{font-size:10px;background:rgba(255,255,255,0.07);color:var(--text-muted);border-radius:6px;padding:2px 7px;}
+
+/* TILE SELECTOR */
+.tile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.tile-btn{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:8px 6px 7px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:11px;color:var(--text-muted);display:flex;flex-direction:column;align-items:center;gap:6px;transition:border-color .2s,color .2s;}
+.tile-btn:hover{border-color:rgba(255,255,255,0.18);color:var(--text);}
+.tile-btn.active{border-color:var(--green);color:var(--green);}
+.tile-thumb{width:100%;height:28px;border-radius:5px;}
+
+    .city-tooltip {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #111;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      color: #111;
+      font-weight: 500;
+      text-align: center;
+      white-space: nowrap;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .city-tooltip::before { border-top-color: #111; }
+
+    .autocomplete-list {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-top: 4px;
+      z-index: 1000;
+      max-height: 200px;
+      overflow-y: auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      display: none;
+    }
+    .autocomplete-item {
+      padding: 10px 12px;
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+    }
+    .autocomplete-item:last-child {
+      border-bottom: none;
+    }
+    .autocomplete-item:hover {
+      background: #333;
+    }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute;z-index:-1;">
+  <defs>
+    <pattern id="hatchDarkGreen" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#166534" stroke-width="3" opacity="0.8" />
+    </pattern>
+    <pattern id="hatchLightGreen" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#4ade80" stroke-width="3" opacity="0.8" />
+    </pattern>
+    <pattern id="hatchOrange" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#f97316" stroke-width="3" opacity="0.8" />
+    </pattern>
+    <pattern id="hatchRed" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#ef4444" stroke-width="3" opacity="0.8" />
+    </pattern>
+  </defs>
+</svg>
+
+
+<header>
+  <div class="logo-icon">🤝</div>
+  <div class="logo-text">
+    <h1>Rendez-vous à mi-chemin</h1>
+    <p>Trouvez le point de rencontre idéal</p>
+  </div>
+</header>
+
+<div class="app-body">
+  <div class="panel">
+
+    <div class="panel-section">
+      <div class="section-label">Vos adresses</div>
+      <div class="friend-block">
+        <div class="friend-header"><div class="friend-dot dot-a"></div><span class="friend-name">Point · A</span></div>
+        <div class="input-wrap" style="position:relative; overflow:visible;">
+          <input type="text" id="addr-a" placeholder="Adresse, ville…" autocomplete="off" oninput="handleInput(event, 'a')">
+          <button class="input-clear" onclick="clearInput('a')">✕</button>
+          <div id="autocomplete-a" class="autocomplete-list"></div>
+        </div>
+      </div>
+      <div class="friend-block">
+        <div class="friend-header"><div class="friend-dot dot-b"></div><span class="friend-name">Point · B</span></div>
+        <div class="input-wrap" style="position:relative; overflow:visible;">
+          <input type="text" id="addr-b" placeholder="Adresse, ville…" autocomplete="off" oninput="handleInput(event, 'b')">
+          <button class="input-clear" onclick="clearInput('b')">✕</button>
+          <div id="autocomplete-b" class="autocomplete-list"></div>
+        </div>
+      </div>
+      <div class="error-msg" id="error-msg"></div>
+
+      <div class="input-group" style="margin-top: 12px; margin-bottom: 12px;">
+        <label style="color:#aaa; font-size:13px; font-weight:600; margin-bottom:6px; display:block;">Temps additionnel max</label>
+        <select id="max-delta" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); outline:none;">
+          <option value="10">+10 min</option>
+          <option value="20" selected>+20 min</option>
+          <option value="30">+30 min</option>
+          <option value="40">+40 min</option>
+                </select>
+      </div>
+      <div class="input-group" style="margin-bottom: 24px;">
+        <label style="color:#aaa; font-size:13px; font-weight:600; margin-bottom:6px; display:block;">Nb de points à calculer</label>
+        <input type="number" id="nb-points" value="10" min="3" max="24" style="width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); outline:none;">
+      </div>
+      <button class="btn-cta" id="btn-calc" onclick="calculate()">Trouver le mi-chemin</button>
+
+      <div id="history-container" style="display:none; margin-top:20px; padding-top:16px; border-top:1px solid #333;">
+        <div style="margin-bottom:12px; font-size:13px; font-weight:600; color:#eee; display:flex; justify-content:space-between; align-items:center;">
+          <span>Recherches récentes</span>
+          <button onclick="clearHistory()" style="background:none; border:none; color:#7ab8e8; cursor:pointer; font-size:12px; padding:0; text-transform:uppercase; letter-spacing:0.5px;">Effacer</button>
+        </div>
+        <div id="history-list" style="display:flex; flex-direction:column; gap:8px; max-height:120px; overflow-y:auto; padding-right:4px;"></div>
+      </div>
+    </div>
+
+    <!-- PROGRESSION -->
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-title">Calcul en cours</div>
+      <div class="progress-step" id="s1"><div class="pdot"></div>Géocodage des adresses</div>
+      <div class="progress-step" id="s2"><div class="pdot"></div>Itinéraire principal A→B</div>
+      <div class="progress-step" id="s3"><div class="pdot"></div>Point égal-temps minimum</div>
+      <div class="progress-step" id="s4"><div class="pdot"></div>Autres points égal-temps</div>
+      <div class="progress-step" id="s5"><div class="pdot"></div>Tracé zone égal-temps</div>
+    </div>
+
+    <!-- AFFICHAGE -->
+    <div class="panel-section">
+      <div class="section-label">Affichage</div>
+      <div class="toggle-row">
+        <span class="toggle-label"><span class="icon">🟢</span> Zone égal-temps</span>
+        <label class="toggle"><input type="checkbox" id="tog-iso" checked onchange="toggleLayer('iso')"><div class="toggle-track"></div></label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label"><span class="icon">📏</span> Perpendiculaire égale-distance</span>
+        <label class="toggle blue"><input type="checkbox" id="tog-equi" onchange="toggleLayer('equi')"><div class="toggle-track"></div></label>
+      </div>
+
+    </div>
+
+    <!-- FOND DE CARTE -->
+    <div class="panel-section">
+      <div class="section-label">Fond de carte</div>
+      <div class="tile-grid" id="tile-grid">
+        <button class="tile-btn active" onclick="setTile('gmap')" id="tb-gmap">
+          <div class="tile-thumb" style="background:linear-gradient(135deg,#e8e4db,#f5f2ec);"></div>
+          <span>G-Plan</span>
+        </button>
+        <button class="tile-btn" onclick="setTile('gsat')" id="tb-gsat">
+          <div class="tile-thumb" style="background:linear-gradient(135deg,#2a4a2a,#1a3a1a);"></div>
+          <span>G-Sat</span>
+        </button>
+        <button class="tile-btn" onclick="setTile('ghybrid')" id="tb-ghybrid">
+          <div class="tile-thumb" style="background:linear-gradient(135deg,#4a5a3a,#2a3a1a);"></div>
+          <span>G-Hybride</span>
+        </button>
+        <button class="tile-btn" onclick="setTile('gterrain')" id="tb-gterrain">
+          <div class="tile-thumb" style="background:linear-gradient(135deg,#c8dea6,#a8c88a);"></div>
+          <span>G-Relief</span>
+        </button>
+        <button class="tile-btn" onclick="setTile('osm')" id="tb-osm">
+          <div class="tile-thumb" style="background:linear-gradient(135deg,#c5d8e8,#e8d5c5);"></div>
+          <span>OSM</span>
+        </button>
+        <button class="tile-btn" onclick="setTile('topo')" id="tb-topo">
+          <div class="tile-thumb" style="background:linear-gradient(135deg,#c8dea6,#a8c88a);"></div>
+          <span>Topo</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- RÉSULTATS -->
+    <div class="panel-section results-block" id="results">
+      <div class="section-label">Résultats</div>
+      <div class="stat-row">
+        <div class="stat-card ca"><div class="stat-label">TEMPS · A (route)</div><div class="stat-value" id="rv-ta">–</div></div>
+        <div class="stat-card cb"><div class="stat-label">TEMPS · B (route)</div><div class="stat-value" id="rv-tb">–</div></div>
+      </div>
+      <div class="stat-row" style="margin-top:10px">
+        <div class="stat-card"><div class="stat-label">Distance A→B (route)</div><div class="stat-value" id="rv-dab">–</div></div>
+        <div class="stat-card"><div class="stat-label">Trajet A→B (route)</div><div class="stat-value" id="rv-dmid">–</div></div>
+      </div>
+      <div class="stat-row" style="margin-top:10px">
+        <div class="stat-card" style="width:100%;"><div class="stat-label">Distance A→B (vol d'oiseau)</div><div class="stat-value" id="rv-dab-vo" style="font-size:16px;">–</div></div>
+      </div>
+      <div class="meet-card">
+        <div class="mc-label">🤝 Point de rencontre</div>
+        <div class="mc-value" id="rv-name">–</div>
+        <div class="mc-sub" id="rv-sub"></div>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="lswatch gh"></div>Segment égal-temps (5 points sur perpendiculaire)</div>
+        <div class="legend-item"><div class="lswatch bd"></div>Perpendiculaire égale-distance (vol d'oiseau)</div>
+      </div>
+    </div>
+
+  </div><!-- /panel -->
+  <div id="map"></div>
+  <div id="map-legend" style="display:none; position:absolute; bottom:24px; right:10px; z-index:1000; background:var(--surface); padding:12px 16px; border-radius:8px; border:1px solid var(--border); color:var(--text); box-shadow:0 4px 16px rgba(0,0,0,0.5); pointer-events:none;"></div>
+  <div id="recenter-controls" style="display:none; position:absolute; top:50%; right:16px; transform:translateY(-50%); z-index:1000; gap:8px; flex-direction:column;">
+    <button onclick="recenterMap('zone')" style="background:#2a2c36; color:#ffffff; border:1px solid #444; padding:10px 14px; border-radius:8px; font-weight:600; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.8); font-size:13px; text-align:left; transition:background 0.2s;">⌖ Zone de rencontre</button>
+    <button onclick="recenterMap('full')" style="background:#7ab8e8; color:#0e0f13; border:none; padding:10px 14px; border-radius:8px; font-weight:600; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,0.8); font-size:13px; text-align:left;">🗺️ Trajet complet</button>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAP
+// ═══════════════════════════════════════════════════════════════════════════════
+const map = L.map('map',{center:[46.5,2.3],zoom:6});
+// tile layer initialized below in setTile()
+
+const state = { markerA:null,markerB:null,isoLayer:null,equiLayer:null,midMarker:null, routeLayer:null, lastBounds:null, zoneBounds:null };
+
+// --- HISTORIQUE ---
+function saveHistory(addrA, addrB) {
+  let hist = JSON.parse(localStorage.getItem('rv_history') || '[]');
+  hist = hist.filter(h => !(h.a === addrA && h.b === addrB) && !(h.a === addrB && h.b === addrA));
+  hist.unshift({a: addrA, b: addrB, date: Date.now()});
+  if(hist.length > 5) hist = hist.slice(0, 5);
+  localStorage.setItem('rv_history', JSON.stringify(hist));
+  renderHistory();
+}
+
+function renderHistory() {
+  const hist = JSON.parse(localStorage.getItem('rv_history') || '[]');
+  const container = document.getElementById('history-container');
+  const list = document.getElementById('history-list');
+  if(!container || !list) return;
+  if(hist.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'block';
+  list.innerHTML = '';
+
+  hist.forEach((h, i) => {
+    const div = document.createElement('div');
+    div.style.cssText = "display:flex; align-items:center; gap:8px; background:#2a2a2a; padding:8px 12px; border-radius:6px; font-size:12px; transition:background 0.2s; border:1px solid #333;";
+    div.onmouseover = () => div.style.background='#333';
+    div.onmouseout = () => div.style.background='#2a2a2a';
+
+    const textDiv = document.createElement('div');
+    textDiv.style.cssText = "flex-grow:1; cursor:pointer; overflow:hidden;";
+    textDiv.onclick = () => loadHistory(h.a, h.b);
+
+    const aDiv = document.createElement('div');
+    aDiv.style.cssText = "color:#aaa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;";
+    // Safe encoding of user input
+    aDiv.textContent = 'A: ' + h.a;
+
+    const bDiv = document.createElement('div');
+    bDiv.style.cssText = "color:#aaa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;";
+    bDiv.textContent = 'B: ' + h.b;
+
+    textDiv.appendChild(aDiv);
+    textDiv.appendChild(bDiv);
+
+    const btn = document.createElement('button');
+    btn.style.cssText = "background:none; border:none; color:#ff6b6b; cursor:pointer; font-size:16px; padding:0 4px;";
+    btn.title = "Supprimer";
+    btn.textContent = "×";
+    btn.onclick = (e) => { 
+      e.stopPropagation(); 
+      removeHistoryItem(i); 
+    };
+
+    div.appendChild(textDiv);
+    div.appendChild(btn);
+    list.appendChild(div);
+  });
+}
+
+function removeHistoryItem(index) {
+  let hist = JSON.parse(localStorage.getItem('rv_history') || '[]');
+  hist.splice(index, 1);
+  localStorage.setItem('rv_history', JSON.stringify(hist));
+  renderHistory();
+}
+
+function loadHistory(a, b) {
+  document.getElementById('addr-a').value = a;
+  document.getElementById('addr-b').value = b;
+  calculate();
+}
+
+function clearHistory() {
+  localStorage.removeItem('rv_history');
+  renderHistory();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderHistory();
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ICONS
+// ═══════════════════════════════════════════════════════════════════════════════
+function mkIcon(color,label){
+  return L.divIcon({className:'',iconSize:[36,36],iconAnchor:[18,36],popupAnchor:[0,-40],
+    html:`<div style="width:36px;height:36px;background:${color};border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.15);">
+      <span style="transform:rotate(45deg);font-size:14px;font-weight:700;color:#0e0f13;">${label}</span></div>`
+  });
+}
+const iconA=mkIcon('#e8c97a','A'), iconB=mkIcon('#7ab8e8','B');
+const iconMid=L.divIcon({className:'',iconSize:[34,34],iconAnchor:[17,17],popupAnchor:[0,-20],
+  html:`<div style="width:34px;height:34px;background:linear-gradient(135deg,#52c97a,#2ecc71);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 4px 20px rgba(0,0,0,.6);border:2px solid rgba(255,255,255,.25);">🤝</div>`
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+function showErr(m){const e=document.getElementById('error-msg');e.textContent=m;e.classList.add('visible');}
+function hideErr(){document.getElementById('error-msg').classList.remove('visible');}
+function clearInput(w){document.getElementById(`addr-${w}`).value='';}
+function recenterMap(type) {
+  if (type === 'full' && state.lastBounds) {
+    map.fitBounds(state.lastBounds, {padding:[30,30]});
+  } else if (type === 'zone' && state.zoneBounds) {
+    map.fitBounds(state.zoneBounds, {padding:[20,20]});
+  }
+}
+function fmtHHMM(s){
+  const m=Math.round(s/60);
+  if(m<60)return `${m}<span class="stat-unit">min</span>`;
+  const h=Math.floor(m/60),r=m%60;
+  return `${h}<span class="stat-unit">h</span>${r.toString().padStart(2,'0')}<span class="stat-unit">min</span>`;
+}
+
+// Progress steps
+function step(id,status){ // 'idle'|'active'|'done'
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.classList.remove('s-active','s-done');
+  if(status==='active')el.classList.add('s-active');
+  if(status==='done')el.classList.add('s-done');
+}
+function setLoading(v){
+  document.getElementById('btn-calc').disabled=v;
+  document.getElementById('progress-wrap').classList.toggle('active',v);
+  if(v)['s1','s2','s3','s4','s5'].forEach(s=>step(s,'idle'));
+}
+
+
+// AUTOCOMPLETE
+let typingTimerA, typingTimerB;
+async function handleInput(e, type) {
+  const val = e.target.value.trim();
+  const list = document.getElementById('autocomplete-' + type);
+  if(type==='a') clearTimeout(typingTimerA);
+  if(type==='b') clearTimeout(typingTimerB);
+
+  if(!val || val.length < 3) {
+    list.style.display = 'none';
+    return;
+  }
+
+  const timer = setTimeout(async () => {
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&limit=5`, {headers:{'Accept-Language':'fr'}});
+      const d = await r.json();
+      if(d.length > 0) {
+        list.innerHTML = '';
+        d.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'autocomplete-item';
+          div.textContent = item.display_name;
+          div.onmousedown = function() {
+            document.getElementById('addr-' + type).value = item.display_name;
+            list.style.display = 'none';
+          };
+          list.appendChild(div);
+        });
+        list.style.display = 'block';
+      } else {
+        list.style.display = 'none';
+      }
+    } catch(err) {
+      list.style.display = 'none';
+    }
+  }, 500);
+
+  if(type==='a') typingTimerA = timer;
+  if(type==='b') typingTimerB = timer;
+}
+
+document.addEventListener('mousedown', (e) => {
+  if(!e.target.closest('#addr-a') && !e.target.closest('#autocomplete-a')) {
+    const listA = document.getElementById('autocomplete-a');
+    if(listA) listA.style.display = 'none';
+  }
+  if(!e.target.closest('#addr-b') && !e.target.closest('#autocomplete-b')) {
+    const listB = document.getElementById('autocomplete-b');
+    if(listB) listB.style.display = 'none';
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GEOCODING
+// ═══════════════════════════════════════════════════════════════════════════════
+async function geocode(addr){
+  const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`,
+    {headers:{'Accept-Language':'fr'}});
+  const d=await r.json();
+  if(!d.length)throw new Error(`Adresse introuvable : "${addr}"`);
+  return{lat:+d[0].lat,lon:+d[0].lon,display:d[0].display_name};
+}
+async function revGeocode(lat,lon){
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
+      {headers:{'Accept-Language':'fr'}});
+    const d=await r.json();
+    const a=d.address||{};
+    return a.city||a.town||a.village||a.suburb||a.hamlet||a.county||'Point médian';
+  }catch{return'Point médian';}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OSRM — Route with full geometry
+// coords returned as [[lat,lon], ...]
+// ═══════════════════════════════════════════════════════════════════════════════
+async function getRoute(lonA,latA,lonB,latB){
+  const r=await fetch(
+    `https://router.project-osrm.org/route/v1/driving/${lonA},${latA};${lonB},${latB}?overview=full&geometries=geojson`
+  );
+  const d=await r.json();
+  if(d.code!=='Ok')throw new Error('Impossible de calculer l\'itinéraire entre ces deux points');
+  const route=d.routes[0];
+  return{
+    duration:route.duration,
+    distance:route.distance,
+    coords:route.geometry.coordinates.map(c=>[c[1],c[0]]) // → [lat,lon]
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OSRM Table — times from ONE source to MANY destinations
+// dests: [[lon,lat], ...]  returns array of durations (seconds)
+// ═══════════════════════════════════════════════════════════════════════════════
+async function tableTimes(srcLon,srcLat,dests){
+  if(!dests.length)return[];
+  const coords=[[srcLon,srcLat],...dests].map(c=>`${c[0]},${c[1]}`).join(';');
+  const destIdx=dests.map((_,i)=>i+1).join(';');
+  const r=await fetch(
+    `https://router.project-osrm.org/table/v1/driving/${coords}?sources=0&destinations=${destIdx}&annotations=duration`
+  );
+  const d=await r.json();
+  if(d.code!=='Ok')throw new Error('Erreur table OSRM');
+  return d.durations[0]; // [t0, t1, ...]
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Find the equal-time point on a polyline (coords: [[lat,lon], ...])
+// Binary search: find idx where timeFromA[idx] ≈ timeFromB[idx]
+// ═══════════════════════════════════════════════════════════════════════════════
+// Cherche tA(P)=tB(P) sur une liste de coords (la route réelle).
+// Méthode : bissection sur l'index de la route (tA-tB change de signe).
+async function findEqualTimePoint(coords, lonA,latA, lonB,latB){
+  const n=coords.length;
+  const S=Math.min(60,n);
+  const stepS=Math.max(1,Math.floor((n-1)/(S-1)));
+  const sampleIdx=[];
+  for(let i=0;i<n;i+=stepS)sampleIdx.push(i);
+  if(sampleIdx[sampleIdx.length-1]!==n-1)sampleIdx.push(n-1);
+
+  const dests=sampleIdx.map(i=>[coords[i][1],coords[i][0]]);
+  const[tA,tB]=await Promise.all([tableTimes(lonA,latA,dests),tableTimes(lonB,latB,dests)]);
+
+  // Trouver le segment où tA-tB change de signe
+  let bestSi=0,bestDiff=Infinity;
+  let signChangeIdx=-1;
+  for(let i=0;i<sampleIdx.length;i++){
+    const a=tA[i]??Infinity,b=tB[i]??Infinity;
+    if(!isFinite(a)||!isFinite(b))continue;
+    const diff=Math.abs(a-b);
+    if(diff<bestDiff){bestDiff=diff;bestSi=i;}
+    if(i>0 && isFinite(tA[i-1]) && isFinite(tB[i-1])){
+      if((tA[i]-tB[i])*(tA[i-1]-tB[i-1])<0) signChangeIdx=i;
+    }
+  }
+
+  // Raffiner dans la zone du changement de signe (ou du minimum de |tA-tB|)
+  const refI = signChangeIdx>=0 ? signChangeIdx : bestSi;
+  const loIdx=Math.max(0,sampleIdx[Math.max(0,refI-1)]);
+  const hiIdx=Math.min(n-1,sampleIdx[Math.min(sampleIdx.length-1,refI+1)]);
+  const finePts=coords.slice(loIdx,hiIdx+1);
+  const fineDests=finePts.map(c=>[c[1],c[0]]);
+
+  let ftA,ftB;
+  try{[ftA,ftB]=await Promise.all([tableTimes(lonA,latA,fineDests),tableTimes(lonB,latB,fineDests)]);}
+  catch{return{lat:coords[sampleIdx[bestSi]][0],lon:coords[sampleIdx[bestSi]][1],tA:tA[bestSi],tB:tB[bestSi]};}
+
+  let fBest=0,fBestDiff=Infinity;
+  for(let i=0;i<finePts.length;i++){
+    const a=ftA[i]??Infinity,b=ftB[i]??Infinity;
+    if(!isFinite(a)||!isFinite(b))continue;
+    if(Math.abs(a-b)<fBestDiff){fBestDiff=Math.abs(a-b);fBest=i;}
+  }
+  const pt=finePts[fBest];
+  return{lat:pt[0],lon:pt[1],tA:ftA[fBest],tB:ftB[fBest]};
+}
+
+// Bissection 2D : étant donné un point de départ (lat0,lon0) et une direction
+// perpendiculaire (upX,upY en mètres), trouve P tel que tA(P)=tB(P)
+// en se déplaçant le long de l'axe AB (direction abNX,abNY) depuis ce point.
+// On fait varier le décalage "along AB" jusqu'à annuler tA-tB.
+async function refineEqualTime(lat0,lon0, upX,upY,abNX,abNY, refLat,refLon, lonA,latA,lonB,latB){
+  let lo=-200000, hi=200000;
+  let bestPt={lat:lat0,lon:lon0};
+  let bestDiff=Infinity;
+
+  for(let iter=0;iter<14;iter++){
+    const mid=(lo+hi)/2;
+    // Travailler en coordonnées relatives à (lat0,lon0) pour zéro dérive
+    const ll=metricToLatLon(abNX*mid, abNY*mid, lat0, lon0);
+    try{
+      const[ta,tb]=await Promise.all([
+        tableTimes(lonA,latA,[[ll.lon,ll.lat]]),
+        tableTimes(lonB,latB,[[ll.lon,ll.lat]])
+      ]);
+      const diff=ta[0]-tb[0];
+      if(Math.abs(diff)<bestDiff){bestDiff=Math.abs(diff);bestPt={lat:ll.lat,lon:ll.lon,tA:ta[0],tB:tb[0]};}
+      if(diff>0) hi=mid; // tA>tB → trop proche de B, revenir vers A
+      else lo=mid;
+      if(Math.abs(diff)<60) break; // < 1 min d'écart : assez précis
+    }catch{break;}
+  }
+  return bestPt;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Perpendicular waypoint: offset along perpendicular to A→B axis
+// frac: position along AB (0=A, 1=B, 0.5=middle)
+// offsetDeg: lateral offset in degrees
+// ═══════════════════════════════════════════════════════════════════════════════
+function perpWaypoint(latA,lonA,latB,lonB,frac,offsetMeters){
+  const refLat=(latA+latB)/2, refLon=(lonA+lonB)/2;
+  const mA=latLonToMetric(latA,lonA,refLat,refLon);
+  const mB=latLonToMetric(latB,lonB,refLat,refLon);
+  const dx=mB.x-mA.x, dy=mB.y-mA.y;
+  const len=Math.sqrt(dx*dx+dy*dy);
+  const px=-dy/len, py=dx/len;
+  const baseX=mA.x+frac*(mB.x-mA.x);
+  const baseY=mA.y+frac*(mB.y-mA.y);
+  return metricToLatLon(baseX+px*offsetMeters, baseY+py*offsetMeters, refLat, refLon);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Equidistant perpendicular (geographic straight line)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Conversion degrés → mètres (approx locale)
+// On travaille en espace métrique pour avoir de vraies perpendiculaires
+// Projette lat/lon en mètres RELATIFS au point de référence (refLat, refLon).
+// Cela évite toute dérive sur grandes distances.
+function latLonToMetric(lat, lon, refLat, refLon) {
+  const R = 6371000;
+  const cosRef = Math.cos(refLat * Math.PI/180);
+  const x = (lon - refLon) * Math.PI/180 * R * cosRef;
+  const y = (lat - refLat) * Math.PI/180 * R;
+  return {x, y};
+}
+function metricToLatLon(x, y, refLat, refLon) {
+  const R = 6371000;
+  const cosRef = Math.cos(refLat * Math.PI/180);
+  const lon = refLon + (x / (R * cosRef)) * 180/Math.PI;
+  const lat = refLat + (y / R) * 180/Math.PI;
+  return {lat, lon};
+}
+
+// Vraie perpendiculaire au milieu de AB, corrigée cos(lat)
+function equidistLine(latA,lonA,latB,lonB){
+  // Point médian EXACT
+  const midLat=(latA+latB)/2, midLon=(lonA+lonB)/2;
+  // Référence = midpoint → toutes les coordonnées métriques sont relatives à lui
+  // Donc mMid = (0,0) par définition, ce qui garantit que la perp passe par mid
+  const refLat=midLat, refLon=midLon;
+  const mA = latLonToMetric(latA,lonA,refLat,refLon); // coords de A relatives à mid
+  const mB = latLonToMetric(latB,lonB,refLat,refLon); // coords de B relatives à mid
+  // mid = (0,0) en espace métrique relatif → midX=0, midY=0
+  const midX=0, midY=0;
+  // Vecteur AB en mètres
+  const dx=mB.x-mA.x, dy=mB.y-mA.y;
+  const len=Math.sqrt(dx*dx+dy*dy);
+  // Perpendiculaire unitaire
+  const px=-dy/len, py=dx/len;
+  const ext=len*1.4;
+  // Extrémités depuis (0,0) → passent EXACTEMENT par midLat/midLon
+  const p1=metricToLatLon(px*ext, py*ext, refLat,refLon);
+  const p2=metricToLatLon(-px*ext, -py*ext, refLat,refLon);
+  const mid={lat:midLat, lon:midLon};
+  return { p1, p2, mid, mA, mB, midX, midY, px, py, ext, refLat, refLon, len };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Build iso zone layer (simple polygon, no hatch)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN CALCULATE
+// ═══════════════════════════════════════════════════════════════════════════════
+async function calculate(){
+  hideErr();
+  const addrA=document.getElementById('addr-a').value.trim();
+  const addrB=document.getElementById('addr-b').value.trim();
+  if(!addrA||!addrB){showErr('Veuillez saisir les deux adresses.');return;}
+
+  setLoading(true);
+  clearLayers();
+
+  try{
+    // ① GÉOCODAGE
+    saveHistory(addrA, addrB);
+    step('s1','active');
+    const[gA,gB]=await Promise.all([geocode(addrA),geocode(addrB)]);
+
+    if(state.markerA)map.removeLayer(state.markerA);
+    if(state.markerB)map.removeLayer(state.markerB);
+    state.markerA=L.marker([gA.lat,gA.lon],{icon:iconA}).addTo(map)
+      .bindPopup(`<b>Point A</b><br>${gA.display.split(',').slice(0,3).join(', ')}`);
+    state.markerB=L.marker([gB.lat,gB.lon],{icon:iconB}).addTo(map)
+      .bindPopup(`<b>Point B</b><br>${gB.display.split(',').slice(0,3).join(', ')}`);
+    // Recadrer immédiatement sur A et B
+    map.fitBounds([[gA.lat, gA.lon], [gB.lat, gB.lon]], {padding: [50, 50]});
+    step('s1','done');
+
+    // ② ITINÉRAIRE PRINCIPAL A→B (route la plus courte, géométrie complète)
+    step('s2','active');
+    const mainRoute=await getRoute(gA.lon,gA.lat,gB.lon,gB.lat);
+    const totalTimeSec=mainRoute.duration;
+    const totalDistKm=mainRoute.distance/1000;
+    step('s2','done');
+
+    // ③ POINT ÉGAL-TEMPS MINIMUM : sur l'itinéraire le plus court A→B
+    //    C'est le point où temps(A→P) = temps(P→B), calculé sur la vraie route
+    step('s3','active');
+    const mainEqRaw=await findEqualTimePoint(mainRoute.coords,gA.lon,gA.lat,gB.lon,gB.lat);
+    // Raffiner pour avoir strictement tA=tB : bissection le long de AB depuis ce point
+    const refLatMain=(gA.lat+gB.lat)/2, refLonMain=(gA.lon+gB.lon)/2;
+    const mA_s3=latLonToMetric(gA.lat,gA.lon,refLatMain,refLonMain);
+    const mB_s3=latLonToMetric(gB.lat,gB.lon,refLatMain,refLonMain);
+    const abDxS3=mB_s3.x-mA_s3.x, abDyS3=mB_s3.y-mA_s3.y;
+    const abLenS3=Math.sqrt(abDxS3*abDxS3+abDyS3*abDyS3);
+    const upXs3=-abDyS3/abLenS3, upYs3=abDxS3/abLenS3; // perp unitaire
+    const abNXs3=upYs3, abNYs3=-upXs3;                  // direction AB normalisée
+    const mainEq=await refineEqualTime(
+      mainEqRaw.lat, mainEqRaw.lon,
+      upXs3, upYs3, abNXs3, abNYs3,
+      refLatMain, refLonMain, gA.lon, gA.lat, gB.lon, gB.lat
+    );
+    // Fallback si refine échoue
+    if(!mainEq.tA){ mainEq.tA=mainEqRaw.tA; mainEq.tB=mainEqRaw.tB;
+      mainEq.lat=mainEqRaw.lat; mainEq.lon=mainEqRaw.lon; }
+    const T_min=(mainEq.tA+mainEq.tB)/2;
+    step('s3','done');
+
+    // ④ 4 POINTS SUPPLÉMENTAIRES sur la perpendiculaire à AB passant par le point égal-temps mini
+    //    2 de chaque côté → avec le point mini, les 5 points forment un segment perpendiculaire à AB
+    step('s4','active');
+    const refLatAB = (gA.lat+gB.lat)/2, refLonAB = (gA.lon+gB.lon)/2;
+    const mEqPt = latLonToMetric(mainEq.lat, mainEq.lon, refLatAB, refLonAB);
+
+    const maxDelta = parseInt(document.getElementById('max-delta') ? document.getElementById('max-delta').value : 40) || 40;
+    const TARGET_DELTAS = [];
+    for(let d=10; d<=maxDelta; d+=10) TARGET_DELTAS.push(d * 60);
+
+    const eqPoints = [{lat:mainEq.lat, lon:mainEq.lon, t:T_min, tA:mainEq.tA, tB:mainEq.tB, delta:0, angle:-1}];
+
+    const numPoints = parseInt(document.getElementById('nb-points') ? document.getElementById('nb-points').value : 10) || 10;
+    let prevAmps = new Array(numPoints).fill(0); // Pour optimiser la recherche suivante
+
+    for(const targetDelta of TARGET_DELTAS){
+      const targetT = T_min + targetDelta;
+
+      let loArr = [...prevAmps];
+      let hiArr = new Array(numPoints).fill((targetDelta/60) * 1500); // approx 1.5km par min
+      let bestPts = new Array(numPoints).fill(null);
+
+      for(let iter = 0; iter < 10; iter++){
+        const testCoords = [];
+        for(let i=0; i<numPoints; i++){
+          const rad = i * (360 / numPoints) * Math.PI / 180;
+          const amp = (loArr[i] + hiArr[i]) / 2;
+          const mPt = { x: mEqPt.x + Math.cos(rad)*amp, y: mEqPt.y + Math.sin(rad)*amp };
+          const llPt = metricToLatLon(mPt.x, mPt.y, refLatAB, refLonAB);
+          testCoords.push([llPt.lon, llPt.lat]);
+        }
+
+        try {
+          const [taArr, tbArr] = await Promise.all([
+            tableTimes(gA.lon, gA.lat, testCoords),
+            tableTimes(gB.lon, gB.lat, testCoords)
+          ]);
+
+          for(let i=0; i<numPoints; i++){
+            const maxT = Math.max(taArr[i], tbArr[i]);
+            bestPts[i] = {lat:testCoords[i][1], lon:testCoords[i][0], tA:taArr[i], tB:tbArr[i], delta:targetDelta, angle: i*(360/numPoints)};
+            if(maxT < targetT) loArr[i] = (loArr[i] + hiArr[i])/2;
+            else hiArr[i] = (loArr[i] + hiArr[i])/2;
+          }
+        } catch(e) { break; }
+      }
+
+      for(let i=0; i<numPoints; i++){
+        if(bestPts[i]){
+           eqPoints.push(bestPts[i]);
+           prevAmps[i] = loArr[i]; // le point de départ du prochain delta sera au moins ici
+        }
+      }
+    }
+    step('s4','done');
+
+    // ⑤ TRACÉ : segment égal-temps + zone circulaire
+    step('s5','active');
+
+    const zoneConfig = {
+      600:  { color: '#166534' },
+      1200: { color: '#4ade80' },
+      1800: { color: '#f97316' },
+      2400: { color: '#ef4444' }
+    };
+
+    const isoLayers = [];
+    const deltas = [2400, 1800, 1200, 600]; // 40, 30, 20, 10
+
+    for (const d of deltas) {
+      const pts = eqPoints.filter(p => p.delta === d);
+      pts.sort((a,b) => a.angle - b.angle); // Trier pour former un polygone régulier
+
+      if (pts.length >= 3) {
+        const polyLL = pts.map(p => [p.lat, p.lon]);
+        const conf = zoneConfig[d];
+        if (conf) {
+          isoLayers.push(L.polygon(polyLL, {
+            color: conf.color, weight: 2, opacity: 0.9, dashArray: '8 4',
+            fillColor: conf.color, fillOpacity: 0.15
+          }));
+        }
+      }
+    }
+
+    const showIso = document.getElementById('tog-iso').checked;
+    state.isoLayer = L.layerGroup(isoLayers);
+
+
+    // Marqueurs sur chaque point égal-temps (noir)
+    // Marqueurs sur chaque point égal-temps (noir)
+
+
+    const dotLayer = L.layerGroup();
+    const mainP = eqPoints.find(p => p.delta === 0);
+    if (mainP) {
+      const marker = L.circleMarker([mainP.lat, mainP.lon], {
+        radius: 7, color: '#111', fillColor: '#fff', fillOpacity: 1, weight: 2
+      }).bindTooltip(`<b>Point de rencontre</b>`, {
+        direction: 'top', offset: [0, -4], permanent: false, className: 'city-tooltip'
+      });
+      dotLayer.addLayer(marker);
+    }
+    
+    // Tracés A -> Point Mini et B -> Point Mini
+    try {
+      const [routeA, routeB] = await Promise.all([
+        getRoute(gA.lon, gA.lat, mainEq.lon, mainEq.lat),
+        getRoute(gB.lon, gB.lat, mainEq.lon, mainEq.lat)
+      ]);
+      // Tracé A -> Point de RDV (couleur du pin A)
+      const lineA = L.polyline(routeA.coords, {color:'#e8c97a', weight:6, opacity:0.9});
+      // Tracé B -> Point de RDV (couleur du pin B)
+      const lineB = L.polyline(routeB.coords, {color:'#7ab8e8', weight:6, opacity:0.9});
+
+      state.routeLayer = L.layerGroup([lineA, lineB]).addTo(map);
+    } catch(e) {
+      console.warn('Erreur lors du tracé des routes A/B vers point central', e);
+    }
+
+    state.isoLayer = L.layerGroup([state.isoLayer, dotLayer]);
+    if(showIso) state.isoLayer.addTo(map);
+
+    // ⑥ PERPENDICULAIRE ÉGALE-DISTANCE — construction complète visible :
+    //   • Segment A→B (vol d'oiseau)
+    //   • Point médian (milieu géométrique de AB)
+    //   • Perpendiculaire vraie (corrigée cos(lat)) au point médian
+    //   • Symbole d'angle droit au point de croisement
+    const showEqui=document.getElementById('tog-equi').checked;
+    const eq=equidistLine(gA.lat,gA.lon,gB.lat,gB.lon);
+    // Segment A→B vol d'oiseau
+    const segAB=L.polyline([[gA.lat,gA.lon], [eq.mid.lat, eq.mid.lon], [gB.lat,gB.lon]],
+      {color:'#7ab8e8',weight:1.5,opacity:0.75,dashArray:'5 4'});
+    // Point médian
+    const midDot=L.circleMarker([eq.mid.lat,eq.mid.lon],
+      {radius:5,color:'#111',fillColor:'#fff',fillOpacity:1,weight:2})
+      .bindTooltip('Milieu géographique A→B',{direction:'top',offset:[0,-6]});
+    // Perpendiculaire vraie
+    const perpLine=L.polyline([[eq.p1.lat,eq.p1.lon], [eq.mid.lat, eq.mid.lon], [eq.p2.lat,eq.p2.lon]],
+      {color:'#7ab8e8',weight:2,opacity:0.9,dashArray:'10 5'});
+    // Symbole angle droit en espace métrique → converti lat/lon
+    const sqM = eq.len * 0.04; // taille du carré = 4% de AB
+    // Vecteur AB normalisé en mètres
+    const abNx=(eq.mB.x-eq.mA.x)/eq.len, abNy=(eq.mB.y-eq.mA.y)/eq.len;
+    const sq1=metricToLatLon(eq.midX+eq.px*sqM,           eq.midY+eq.py*sqM,           eq.refLat,eq.refLon);
+    const sq2=metricToLatLon(eq.midX+eq.px*sqM+abNx*sqM,  eq.midY+eq.py*sqM+abNy*sqM,  eq.refLat,eq.refLon);
+    const sq3=metricToLatLon(eq.midX+abNx*sqM,            eq.midY+abNy*sqM,            eq.refLat,eq.refLon);
+    const rightAngle=L.polyline([[sq1.lat,sq1.lon],[sq2.lat,sq2.lon],[sq3.lat,sq3.lon]],
+      {color:'#7ab8e8',weight:1.5,opacity:0.85,interactive:false});
+    state.equiLayer=L.layerGroup([segAB,midDot,perpLine,rightAngle]);
+    if(showEqui)state.equiLayer.addTo(map);
+
+    // ⑦ MARQUEUR POINT DE RENCONTRE (égal-temps minimum)
+    const meetName=await revGeocode(mainEq.lat,mainEq.lon);
+    state.midMarker=L.marker([mainEq.lat,mainEq.lon],{icon:iconMid}).addTo(map)
+      .bindPopup(
+        `<b>🤝 Point de rencontre</b><br><b>${meetName}</b><br>`+
+        `<span style="color:#e8c97a">A : ${fmtHHMM(mainEq.tA)}</span>&nbsp;·&nbsp;`+
+        `<span style="color:#7ab8e8">B : ${fmtHHMM(mainEq.tB)}</span><br>`+
+        `<span style="color:rgba(240,237,232,.5);font-size:11px">Via l'itinéraire le plus court</span>`
+      ).openPopup();
+
+    // ⑧ VUE
+    state.lastBounds = [[gA.lat,gA.lon],[gB.lat,gB.lon]];
+    state.zoneBounds = eqPoints.map(p => [p.lat, p.lon]);
+    map.fitBounds(state.lastBounds, {padding:[30,30]});
+    const recCtrl = document.getElementById('recenter-controls');
+    if(recCtrl) recCtrl.style.display = 'flex';
+
+    // ⑨ RÉSULTATS
+    document.getElementById('rv-ta').innerHTML=fmtHHMM(mainEq.tA);
+    document.getElementById('rv-tb').innerHTML=fmtHHMM(mainEq.tB);
+    document.getElementById('rv-dab').innerHTML=`${totalDistKm.toFixed(0)}<span class="stat-unit">km</span>`;
+    document.getElementById('rv-dmid').innerHTML=fmtHHMM(totalTimeSec);
+
+    // Calcul distance vol d'oiseau
+    const eqBird = equidistLine(gA.lat,gA.lon,gB.lat,gB.lon);
+    document.getElementById('rv-dab-vo').innerHTML=`${(eqBird.len/1000).toFixed(0)}<span class="stat-unit">km</span>`;
+    document.getElementById('rv-name').textContent=meetName;
+    
+    // Affichage de la légende
+    const legend = document.getElementById('map-legend');
+    if (legend) {
+      let html = '<div style="font-weight:600; margin-bottom:10px; font-size:15px; border-bottom:1px solid #444; padding-bottom:6px;">Légende</div>';
+      const maxD = parseInt(document.getElementById('max-delta').value) || 40;
+      const colors = {10:'#166534', 20:'#4ade80', 30:'#f97316', 40:'#ef4444'};
+      for(let d=10; d<=maxD; d+=10) {
+        html += `<div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+          <div style="width:18px; height:18px; border-radius:4px; background:${colors[d]}; opacity:0.4; border:2px dashed ${colors[d]}"></div>
+          <span style="font-size:14px; font-weight:500;">+ ${d} min</span>
+        </div>`;
+      }
+      legend.innerHTML = html;
+      legend.style.display = 'block';
+    }
+document.getElementById('rv-sub').textContent=
+      `Temps égal-temps min : ${Math.round(T_min/60)} min · ${eqPoints.length} points calculés`;
+    document.getElementById('results').classList.add('visible');
+    step('s5','done');
+
+  }catch(e){
+    console.error(e);
+    showErr(e.message||'Une erreur est survenue. Vérifiez les adresses.');
+  }finally{
+    setLoading(false);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TILE LAYERS
+// ═══════════════════════════════════════════════════════════════════════════════
+const TILES = {
+  gmap: { url: 'https://{s}.google.com/vt/lyrs=m&hl=fr&x={x}&y={y}&z={z}', attr: '© Google', subdomains:['mt0','mt1','mt2','mt3'] },
+  gsat: { url: 'https://{s}.google.com/vt/lyrs=s&hl=fr&x={x}&y={y}&z={z}', attr: '© Google', subdomains:['mt0','mt1','mt2','mt3'] },
+  ghybrid: { url: 'https://{s}.google.com/vt/lyrs=y&hl=fr&x={x}&y={y}&z={z}', attr: '© Google', subdomains:['mt0','mt1','mt2','mt3'] },
+  gterrain: { url: 'https://{s}.google.com/vt/lyrs=p&hl=fr&x={x}&y={y}&z={z}', attr: '© Google', subdomains:['mt0','mt1','mt2','mt3'] },
+  osm: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '© OpenStreetMap', subdomains:['a','b','c'] },
+  topo: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attr: '© OpenStreetMap © OpenTopoMap', subdomains:['a','b','c'] }
+};
+
+let currentTileLayer = L.tileLayer(TILES.gmap.url, {attribution: TILES.gmap.attr, maxZoom:19, subdomains: TILES.gmap.subdomains}).addTo(map);
+let currentTileKey = 'gmap';
+
+function setTile(key) {
+  if(key === currentTileKey) return;
+  map.removeLayer(currentTileLayer);
+  const t = TILES[key];
+  currentTileLayer = L.tileLayer(t.url, {attribution: t.attr, maxZoom:19, subdomains: t.subdomains || 'abc'}).addTo(map);
+  currentTileLayer.bringToBack();
+  currentTileKey = key;
+  // update button styles
+  document.querySelectorAll('.tile-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('tb-'+key);
+  if(btn) btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LAYER TOGGLES
+// ═══════════════════════════════════════════════════════════════════════════════
+function toggleLayer(which){
+  if(which==='iso'&&state.isoLayer){
+    if(document.getElementById('tog-iso').checked)state.isoLayer.addTo(map);
+    else map.removeLayer(state.isoLayer);
+  }
+  if(which==='equi'&&state.equiLayer){
+    if(document.getElementById('tog-equi').checked)state.equiLayer.addTo(map);
+    else map.removeLayer(state.equiLayer);
+  }
+}
+
+function clearLayers(){
+  ['isoLayer','equiLayer','midMarker','routeLayer'].forEach(k=>{
+    if(state[k]){try{map.removeLayer(state[k]);}catch{}state[k]=null;}
+  });
+  document.getElementById('results').classList.remove('visible');
+  const leg = document.getElementById('map-legend'); if(leg) leg.style.display='none';
+  const recCtrl = document.getElementById('recenter-controls'); if(recCtrl) recCtrl.style.display='none';
+}
+
+['addr-a','addr-b'].forEach(id=>
+  document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')calculate();})
+);
+</script>
+</body>
+</html>
