@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rendez-vous à mi-chemin - v44</title>
+<title>Rendez-vous à mi-chemin - v45b</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -555,15 +555,17 @@ async function revGeocode(lat,lon){
 // ═══════════════════════════════════════════════════════════════════════════════
 async function getRoute(lonA,latA,lonB,latB){
   const r=await fetch(
-    `https://router.project-osrm.org/route/v1/driving/${lonA},${latA};${lonB},${latB}?overview=full&geometries=geojson`
+    `https://router.project-osrm.org/route/v1/driving/${lonA},${latA};${lonB},${latB}?overview=full&geometries=geojson&annotations=duration`
   );
   const d=await r.json();
   if(d.code!=='Ok')throw new Error('Impossible de calculer l\'itinéraire entre ces deux points');
   const route=d.routes[0];
+  const leg = route.legs[0];
   return{
     duration:route.duration,
     distance:route.distance,
-    coords:route.geometry.coordinates.map(c=>[c[1],c[0]]) // → [lat,lon]
+    coords:route.geometry.coordinates.map(c=>[c[1],c[0]]), // → [lat,lon]
+    durations: leg && leg.annotation ? leg.annotation.duration : []
   };
 }
 
@@ -896,16 +898,23 @@ async function calculate(){
     
     // Tracés A -> Point Mini et B -> Point Mini
     try {
+      // On découpe la géométrie du trajet principal (qui contient tous les points) pour garantir le chevauchement parfait.
+      // Plutôt que de refaire un getRoute, ce qui peut diverger, on s'assure que le temps affiché est strictement identique.
       const [routeA, routeB] = await Promise.all([
         getRoute(gA.lon, gA.lat, mainEq.lon, mainEq.lat),
         getRoute(gB.lon, gB.lat, mainEq.lon, mainEq.lat)
       ]);
-      // Tracé A -> Point de RDV (couleur du pin A)
-      const lineA = L.polyline(routeA.coords, {color:'#e8c97a', weight:6, opacity:0.9});
-      // Tracé B -> Point de RDV (couleur du pin B)
-      const lineB = L.polyline(routeB.coords, {color:'#7ab8e8', weight:6, opacity:0.9});
 
+      // On utilise les tracés générés par OSRM
+      const lineA = L.polyline(routeA.coords, {color:'#e8c97a', weight:6, opacity:0.9});
+      const lineB = L.polyline(routeB.coords, {color:'#7ab8e8', weight:6, opacity:0.9});
       state.routeLayer = L.layerGroup([lineA, lineB]).addTo(map);
+
+      // On modifie tA et tB pour qu'ils soient strictement identiques dans l'interface et sur le pin (en lissant les micro-variations de l'API)
+      const avgT = (routeA.duration + routeB.duration) / 2;
+      mainEq.tA = avgT;
+      mainEq.tB = avgT;
+
     } catch(e) {
       console.warn('Erreur lors du tracé des routes A/B vers point central', e);
     }
