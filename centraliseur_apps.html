@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>centraliseur_apps_V1-39-SECURE.html</title>
+  <title>Centraliseur Apps v2.0.0</title>
   <style>
     :root{
       --bg1:#0b1126;--bg2:#16203c;--glass:rgba(22,30,58,.65);--line:rgba(255,255,255,.08);--text:#f5f8ff;--muted:#aab7d7;
@@ -91,6 +91,20 @@
 .version-input{width:48px;font-size:11px;text-align:center;background:rgba(125,168,255,.1);border:1px solid rgba(125,168,255,.3);border-radius:8px;padding:2px 4px;color:var(--blue);font-weight:500;font-family:ui-monospace}
 .version-input:focus{outline:none;box-shadow:0 0 0 2px rgba(125,168,255,.3)}
 #copyUrlBtn:hover{opacity:1!important;background:rgba(125,168,255,.15)!important}
+
+/* ── GOOGLE DRIVE OVERLAYS ── */
+.drive-overlay{position:fixed;inset:0;z-index:9000;background:rgba(11,17,38,.97);display:none;align-items:center;justify-content:center;flex-direction:column;gap:18px;padding:24px;}
+.drive-overlay.open{display:flex;}
+.drive-card{background:rgba(22,30,58,.9);border:1px solid rgba(255,255,255,.1);border-radius:22px;padding:32px 28px;width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;box-shadow:0 18px 42px rgba(0,0,0,.4);}
+.drive-title{font-size:20px;font-weight:700;letter-spacing:-.02em;color:#f5f8ff;text-align:center;}
+.drive-sub{font-size:13px;color:var(--muted);line-height:1.6;text-align:center;}
+.drive-btn{padding:14px;border-radius:16px;background:linear-gradient(135deg,rgba(75,125,255,.95),rgba(126,168,255,.9));color:#fff;font-size:15px;font-weight:600;border:none;cursor:pointer;min-height:50px;transition:opacity .15s;}
+.drive-btn:hover{opacity:.88;}
+.drive-btn.ghost{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);}
+.drive-msg{font-size:12px;color:var(--muted);text-align:center;}
+.drive-spinner{width:34px;height:34px;border:3px solid rgba(255,255,255,.1);border-top-color:#7da8ff;border-radius:50%;animation:dspin .8s linear infinite;}
+@keyframes dspin{to{transform:rotate(360deg)}}
+.drive-update-actions{display:flex;gap:8px;justify-content:flex-end;}
 </style>
 </head>
 <body>
@@ -98,7 +112,10 @@
     <div class="sticky">
       <div class="sticky-inner">
         <div class="status glass"><span id="statusDot" class="dot orange"></span><div id="statusText" class="status-text">En attente.</div></div>
-        <div class="header-badge"><span id="appVersionLabel">V1-39</span></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <div class="header-badge" id="driveBadge" style="cursor:pointer;user-select:none" onclick="handleDriveBadgeClick()" title="Google Drive — cliquer pour déconnecter">☁ Drive</div>
+          <div class="header-badge"><span id="appVersionLabel">v2.0.0</span></div>
+        </div>
       </div>
     </div>
 
@@ -163,8 +180,33 @@
   </div>
   <div id="copyToast" class="toast-copy">URL copiée</div>
 
+  <!-- ── GOOGLE DRIVE OVERLAYS ── -->
+  <div class="drive-overlay" id="driveLoginOverlay">
+    <div class="drive-card">
+      <div style="text-align:center;font-size:2rem">🔧</div>
+      <div class="drive-title">Centraliseur Apps</div>
+      <div class="drive-sub">Vos données sont stockées sur Google Drive.<br>Connectez-vous pour y accéder.</div>
+      <button class="drive-btn" onclick="driveSignIn()">🔑 Se connecter avec Google</button>
+      <div class="drive-msg" id="driveLoginStatus"></div>
+    </div>
+  </div>
+  <div class="drive-overlay" id="driveLoadingOverlay">
+    <div class="drive-spinner"></div>
+    <div style="color:var(--muted);font-size:13px;">Connexion à Google Drive…</div>
+  </div>
+  <div class="drive-overlay" id="driveUpdateOverlay">
+    <div class="drive-card">
+      <div class="drive-title">☁ Mise à jour disponible</div>
+      <div class="drive-sub" id="driveUpdateMsg"></div>
+      <div class="drive-update-actions">
+        <button class="drive-btn ghost" onclick="driveKeepLocal()">Garder local</button>
+        <button class="drive-btn" onclick="driveApplyRemote()">Mettre à jour</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    const APP_VERSION = 'V1-39';
+    const APP_VERSION = 'v2.0.0';
     const PROFILE_STORAGE_KEY = 'centraliseur-apps-profiles';
     const DATA_STORAGE_KEY = 'centraliseur-apps-data';
     const UI_STORAGE_KEY = 'centraliseur-apps-ui';
@@ -206,7 +248,241 @@
       fitWrap: document.getElementById('fitWrap'),
     };
 
+    // ── APP-SPECIFIC DRIVE CONSTANTS ──
+    const DRIVE_FILE_NAME = 'centraliseur_apps.json';
+    const DRIVE_CLIENT_ID = '68487410553-mp697niljk1ov3sn2ucjfe8ckkqds48p.apps.googleusercontent.com';
+    const DRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.appdata';
+    const DRIVE_LS        = 'ca.drive.'; // app-specific prefix
+    const DRIVE_CACHE_KEY = 'ca.drive.cache';
+
+    let driveTokenClient  = null;
+    let driveAccessToken  = null;
+    let driveFileId       = null;
+    let _drivePendingRemote = null;
+    let _drivePollTimer   = null;
+    let _driveSaveTimer   = null;
+    let _driveInitResolve = null;
+    const driveInitReady  = new Promise(res => { _driveInitResolve = res; });
+
+    function driveLoadLibs() {
+      return new Promise(resolve => {
+        let gapiReady = false, gisReady = false;
+        const check = () => { if (gapiReady && gisReady) resolve(); };
+        const s1 = document.createElement('script'); s1.src = 'https://apis.google.com/js/api.js';
+        s1.onload = () => { gapi.load('client', async () => { await gapi.client.init({}); gapiReady = true; check(); }); };
+        document.head.appendChild(s1);
+        const s2 = document.createElement('script'); s2.src = 'https://accounts.google.com/gsi/client';
+        s2.onload = () => { gisReady = true; check(); }; document.head.appendChild(s2);
+      });
+    }
+
+    async function driveInit() {
+      await driveLoadLibs();
+      const hint = sessionStorage.getItem(DRIVE_LS+'hint') || localStorage.getItem(DRIVE_LS+'hint') || '';
+      const wasConnected = localStorage.getItem(DRIVE_LS+'connected') === '1';
+      driveTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPE, login_hint: hint,
+        callback: async (resp) => {
+          if (resp.error) { driveHideLoading(); driveShowLogin(true); return; }
+          driveAccessToken = resp.access_token;
+          gapi.client.setToken({ access_token: driveAccessToken });
+          try {
+            const ui = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + driveAccessToken } });
+            const ud = await ui.json();
+            if (ud.email) { localStorage.setItem(DRIVE_LS+'hint', ud.email); sessionStorage.setItem(DRIVE_LS+'hint', ud.email); }
+          } catch(e) {}
+          localStorage.setItem(DRIVE_LS+'connected', '1'); sessionStorage.setItem(DRIVE_LS+'connected', '1');
+          driveHideLoading(); driveShowLogin(false);
+          updateDriveBadge();
+          setStatus('green', 'Google Drive connecté.');
+          await driveFetchAndCompare();
+          driveStartPolling();
+        }
+      });
+      _driveInitResolve();
+      if (wasConnected && hint) { driveShowLoading(); driveTokenClient.requestAccessToken({ prompt: 'none' }); }
+      else { driveShowLogin(true); }
+    }
+
+    async function driveSignIn() {
+      await driveInitReady;
+      if (!driveTokenClient) return;
+      driveTokenClient.requestAccessToken({ prompt: 'select_account' });
+    }
+
+    function driveShowLogin(show) {
+      driveHideLoading();
+      document.getElementById('driveLoginOverlay').className = 'drive-overlay' + (show ? ' open' : '');
+    }
+    function driveShowLoading() { document.getElementById('driveLoadingOverlay').className = 'drive-overlay open'; }
+    function driveHideLoading() { document.getElementById('driveLoadingOverlay').className = 'drive-overlay'; }
+
+    async function driveGetFileId() {
+      if (driveFileId) return driveFileId;
+      const cached = localStorage.getItem(DRIVE_LS+'file_id');
+      if (cached) { driveFileId = cached; return driveFileId; }
+      const resp = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${DRIVE_FILE_NAME}'&fields=files(id)`, { headers: { Authorization: 'Bearer ' + driveAccessToken } });
+      const data = await resp.json();
+      if (data.files && data.files.length > 0) { driveFileId = data.files[0].id; localStorage.setItem(DRIVE_LS+'file_id', driveFileId); return driveFileId; }
+      return null;
+    }
+
+    function buildDrivePayload() {
+      return {
+        profiles: { githubProfiles: state.githubProfiles, hfProfiles: state.hfProfiles, githubToken: state.githubToken, koyebUrls: state.koyebUrls, koyebToken: state.koyebToken, koyebProxyUrl: state.koyebProxyUrl },
+        appData:  { githubApps: state.githubApps, hfApps: state.hfApps, koyebApps: state.koyebApps },
+        ui:       { debugOpen: state.debugOpen, sourcesCollapsed: state.sourcesCollapsed, expandedItems: state.expandedItems }
+      };
+    }
+
+    function scheduleDriveSave() {
+      if (!driveAccessToken) return;
+      clearTimeout(_driveSaveTimer);
+      setStatus('orange', 'Sauvegarde Drive…');
+      _driveSaveTimer = setTimeout(async () => {
+        try {
+          const payload = JSON.stringify(buildDrivePayload(), null, 2);
+          const fileId = await driveGetFileId();
+          let url, method;
+          if (fileId) {
+            url = 'https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media&fields=id,modifiedTime';
+            method = 'PATCH';
+          } else {
+            const meta = { name: DRIVE_FILE_NAME, parents: ['appDataFolder'] };
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+            form.append('file', new Blob([payload], { type: 'application/json' }));
+            const cr = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime', { method: 'POST', headers: { Authorization: 'Bearer ' + driveAccessToken }, body: form });
+            const cd = await cr.json();
+            driveFileId = cd.id; localStorage.setItem(DRIVE_LS+'file_id', driveFileId);
+            const iso = cd.modifiedTime || new Date().toISOString();
+            localStorage.setItem(DRIVE_LS+'last_sync_iso', iso); localStorage.setItem(DRIVE_LS+'last_sync', new Date(iso).toLocaleString('fr-FR'));
+            localStorage.setItem(DRIVE_CACHE_KEY, payload);
+            setStatus('green', 'Sauvegardé sur Drive.'); return;
+          }
+          const resp = await fetch(url, { method, headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' }, body: payload });
+          const data = await resp.json();
+          const iso = data.modifiedTime || new Date().toISOString();
+          localStorage.setItem(DRIVE_LS+'last_sync_iso', iso); localStorage.setItem(DRIVE_LS+'last_sync', new Date(iso).toLocaleString('fr-FR'));
+          localStorage.setItem(DRIVE_CACHE_KEY, payload);
+          setStatus('green', 'Sauvegardé sur Drive.');
+        } catch(e) { setStatus('red', 'Erreur sauvegarde Drive.'); }
+      }, 2000);
+    }
+
+    async function driveFetchAndCompare() {
+      if (!driveAccessToken) return;
+      try {
+        const fileId = await driveGetFileId(); if (!fileId) return;
+        const metaResp = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?fields=modifiedTime', { headers: { Authorization: 'Bearer ' + driveAccessToken } });
+        const meta = await metaResp.json();
+        const remoteIso = meta.modifiedTime;
+        const remoteSyncedAt = remoteIso ? new Date(remoteIso) : null;
+        const localIso = localStorage.getItem(DRIVE_LS+'last_sync_iso');
+        const localSyncedAt = localIso ? new Date(localIso) : null;
+
+        if (!localSyncedAt) {
+          // First load — always apply remote silently
+          const contentResp = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media', { headers: { Authorization: 'Bearer ' + driveAccessToken } });
+          const remote = await contentResp.json();
+          localStorage.setItem(DRIVE_LS+'last_sync_iso', remoteIso);
+          localStorage.setItem(DRIVE_LS+'last_sync', new Date(remoteIso).toLocaleString('fr-FR'));
+          localStorage.setItem(DRIVE_CACHE_KEY, JSON.stringify(remote));
+          applyRemoteData(remote); return;
+        }
+
+        if (!remoteSyncedAt || remoteSyncedAt <= localSyncedAt) return;
+        if (document.getElementById('driveUpdateOverlay').classList.contains('open')) return;
+
+        const contentResp = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media', { headers: { Authorization: 'Bearer ' + driveAccessToken } });
+        const remote = await contentResp.json();
+        if (!remote.profiles && !remote.appData) return;
+        _drivePendingRemote = { ...remote, _canonicalIso: remoteIso };
+        const dateStr = remoteSyncedAt.toLocaleString('fr-FR');
+        const remoteCount = ((remote.appData?.githubApps||[]).length + (remote.appData?.hfApps||[]).length + (remote.appData?.koyebApps||[]).length);
+        document.getElementById('driveUpdateMsg').innerHTML = 'Une version plus récente est disponible sur Google Drive.<br><b>Drive :</b> ' + remoteCount + ' app(s) — <i>' + dateStr + '</i>';
+        document.getElementById('driveUpdateOverlay').className = 'drive-overlay open';
+      } catch(e) { /* silent */ }
+    }
+
+    function applyRemoteData(remote) {
+      if (remote.profiles) {
+        state.githubProfiles = remote.profiles.githubProfiles || [];
+        state.hfProfiles     = remote.profiles.hfProfiles     || [];
+        state.githubToken    = remote.profiles.githubToken    || '';
+        state.koyebUrls      = remote.profiles.koyebUrls      || '';
+        state.koyebToken     = remote.profiles.koyebToken     || '';
+        state.koyebProxyUrl  = remote.profiles.koyebProxyUrl  || '/api/koyeb/apps';
+        hydrate();
+      }
+      if (remote.appData) {
+        state.githubApps = Array.isArray(remote.appData.githubApps) ? remote.appData.githubApps : [];
+        state.hfApps     = Array.isArray(remote.appData.hfApps)     ? remote.appData.hfApps     : [];
+        state.koyebApps  = Array.isArray(remote.appData.koyebApps)  ? remote.appData.koyebApps  : [];
+      }
+      if (remote.ui) {
+        state.debugOpen          = !!remote.ui.debugOpen;
+        state.sourcesCollapsed   = !!remote.ui.sourcesCollapsed;
+        state.expandedItems      = remote.ui.expandedItems || {};
+      }
+      renderDebug(); renderSourcesPanel(); renderList();
+      setStatus('green', 'Données chargées depuis Drive.');
+    }
+
+    function driveKeepLocal() {
+      document.getElementById('driveUpdateOverlay').className = 'drive-overlay';
+      _drivePendingRemote = null;
+      scheduleDriveSave();
+    }
+    function driveApplyRemote() {
+      const remote = _drivePendingRemote; _drivePendingRemote = null;
+      if (!remote) return;
+      document.getElementById('driveUpdateOverlay').className = 'drive-overlay';
+      const iso = remote._canonicalIso || new Date().toISOString();
+      localStorage.setItem(DRIVE_LS+'last_sync_iso', iso);
+      localStorage.setItem(DRIVE_LS+'last_sync', new Date(iso).toLocaleString('fr-FR'));
+      localStorage.setItem(DRIVE_CACHE_KEY, JSON.stringify(remote));
+      applyRemoteData(remote);
+    }
+
+    function driveStartPolling() {
+      if (_drivePollTimer) return;
+      _drivePollTimer = setInterval(() => { if (document.visibilityState === 'visible' && driveAccessToken) driveFetchAndCompare(); }, 15000);
+    }
+    function driveStopPolling() { if (_drivePollTimer) { clearInterval(_drivePollTimer); _drivePollTimer = null; } }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && driveAccessToken) driveFetchAndCompare();
+      else driveStopPolling();
+    });
+
+    // Load local cache immediately for instant display
+    (function loadCache() {
+      try {
+        const cached = JSON.parse(localStorage.getItem(DRIVE_CACHE_KEY));
+        if (!cached) return;
+        if (cached.profiles) {
+          state.githubProfiles = cached.profiles.githubProfiles || [];
+          state.hfProfiles     = cached.profiles.hfProfiles     || [];
+          state.githubToken    = cached.profiles.githubToken    || '';
+          state.koyebUrls      = cached.profiles.koyebUrls      || '';
+          state.koyebToken     = cached.profiles.koyebToken     || '';
+          state.koyebProxyUrl  = cached.profiles.koyebProxyUrl  || '/api/koyeb/apps';
+        }
+        if (cached.appData) {
+          state.githubApps = Array.isArray(cached.appData.githubApps) ? cached.appData.githubApps : [];
+          state.hfApps     = Array.isArray(cached.appData.hfApps)     ? cached.appData.hfApps     : [];
+          state.koyebApps  = Array.isArray(cached.appData.koyebApps)  ? cached.appData.koyebApps  : [];
+        }
+        if (cached.ui) {
+          state.debugOpen        = !!cached.ui.debugOpen;
+          state.sourcesCollapsed = !!cached.ui.sourcesCollapsed;
+          state.expandedItems    = cached.ui.expandedItems || {};
+        }
+      } catch(e) {}
+    })();
+
     init();
+    driveInit();
 
     function init(){
 
@@ -321,13 +597,20 @@
       state.koyebUrls = String(el.koyebUrls.value || '');
       state.koyebToken = String(el.koyebToken.value || '');
       state.koyebProxyUrl = String(el.koyebProxyUrl.value || '/api/koyeb/apps');
+      // Keep local storage as cache only
       localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({ version: APP_VERSION, githubProfiles: state.githubProfiles, hfProfiles: state.hfProfiles, githubToken: state.githubToken, koyebUrls: state.koyebUrls, koyebToken: state.koyebToken, koyebProxyUrl: state.koyebProxyUrl }));
       localStorage.setItem(KOYEB_URLS_STORAGE_KEY, state.koyebUrls);
       updateSourcesPill();
-      setStatus('green', 'Profils sauvegardés localement.');
+      scheduleDriveSave();
     }
-    function saveAppData(){ localStorage.setItem(DATA_STORAGE_KEY, JSON.stringify({ version: APP_VERSION, githubApps: state.githubApps, hfApps: state.hfApps, koyebApps: state.koyebApps, savedAt: new Date().toISOString() })); }
-    function saveUi(){ localStorage.setItem(UI_STORAGE_KEY, JSON.stringify({ debugOpen: state.debugOpen, sourcesCollapsed: state.sourcesCollapsed, expandedItems: state.expandedItems })); }
+    function saveAppData(){
+      localStorage.setItem(DATA_STORAGE_KEY, JSON.stringify({ version: APP_VERSION, githubApps: state.githubApps, hfApps: state.hfApps, koyebApps: state.koyebApps, savedAt: new Date().toISOString() }));
+      scheduleDriveSave();
+    }
+    function saveUi(){
+      localStorage.setItem(UI_STORAGE_KEY, JSON.stringify({ debugOpen: state.debugOpen, sourcesCollapsed: state.sourcesCollapsed, expandedItems: state.expandedItems }));
+      scheduleDriveSave();
+    }
     function loadProfiles(){ try{ const raw = localStorage.getItem(PROFILE_STORAGE_KEY); if(raw){ const data = JSON.parse(raw); state.githubProfiles = Array.isArray(data.githubProfiles) ? data.githubProfiles : []; state.hfProfiles = Array.isArray(data.hfProfiles) ? data.hfProfiles : []; state.githubToken = String(data.githubToken || ''); state.koyebUrls = String(data.koyebUrls || ''); state.koyebToken = String(data.koyebToken || ''); state.koyebProxyUrl = String(data.koyebProxyUrl || '/api/koyeb/apps'); } const standaloneKoyebUrls = localStorage.getItem(KOYEB_URLS_STORAGE_KEY); if(standaloneKoyebUrls) state.koyebUrls = String(standaloneKoyebUrls || state.koyebUrls || ''); }catch(_){} }
     function loadAppData(){ try{ const raw = localStorage.getItem(DATA_STORAGE_KEY); if(!raw) return; const data = JSON.parse(raw); state.githubApps = Array.isArray(data.githubApps) ? data.githubApps : []; state.hfApps = Array.isArray(data.hfApps) ? data.hfApps.map(row => { const v = String(row?.appVersion || row?.version || '').trim(); if(/^[a-f0-9]{7}$/i.test(v)){ if(row.appVersion) row.appVersion = ''; else row.version = ''; } return row; }) : []; state.koyebApps = Array.isArray(data.koyebApps) ? data.koyebApps : []; }catch(_){} }
     function loadUi(){ try{ const raw = localStorage.getItem(UI_STORAGE_KEY); if(!raw) return; const data = JSON.parse(raw); state.debugOpen = !!data.debugOpen; state.sourcesCollapsed = !!data.sourcesCollapsed; state.expandedItems = data.expandedItems || {}; }catch(_){} }
@@ -754,6 +1037,37 @@ function getAllRows(){ return [...state.githubApps, ...state.hfApps, ...state.ko
         return;
       }
       if(action==='copy'){ try{ await navigator.clipboard.writeText(row.link); setStatus('green', 'Lien copié.'); }catch{ setStatus('red', 'Copie impossible sur ce navigateur.'); } }
+    }
+    function updateDriveBadge() {
+      const badge = document.getElementById('driveBadge');
+      if (!badge) return;
+      if (driveAccessToken) {
+        badge.style.background = 'rgba(56,211,159,.15)';
+        badge.style.borderColor = 'rgba(56,211,159,.3)';
+        badge.style.color = 'var(--ok)';
+        badge.textContent = '☁ ✓ Drive';
+      } else {
+        badge.style.background = '';
+        badge.style.borderColor = '';
+        badge.style.color = '';
+        badge.textContent = '☁ Drive';
+      }
+    }
+    function handleDriveBadgeClick() {
+      if (driveAccessToken) {
+        if (!confirm('Déconnecter Google Drive ?')) return;
+        google.accounts.oauth2.revoke(driveAccessToken);
+        driveAccessToken = null; driveFileId = null;
+        ['connected','hint','file_id','last_sync','last_sync_iso'].forEach(k => {
+          localStorage.removeItem(DRIVE_LS+k); sessionStorage.removeItem(DRIVE_LS+k);
+        });
+        localStorage.removeItem(DRIVE_CACHE_KEY);
+        driveStopPolling();
+        updateDriveBadge();
+        driveShowLogin(true);
+      } else {
+        driveSignIn();
+      }
     }
   </script>
 </body>
