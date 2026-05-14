@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drive Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #0c0c0f;
+  --bg2:    #111116;
+  --bg3:    #1a1a22;
+  --border: rgba(255,255,255,.07);
+  --border2:rgba(255,255,255,.14);
+  --text:   #e8e8f0;
+  --muted:  #6b6b80;
+  --accent: #7fff6e;
+  --accent2:#00d4ff;
+  --danger: #ff4d6a;
+  --warn:   #ffb347;
+  --r:      10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* ── background grid ── */
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
+
+/* ── layout ── */
+.shell{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:0 24px 60px}
+
+/* ── header ── */
+header{display:flex;align-items:center;justify-content:space-between;padding:32px 0 28px;border-bottom:1px solid var(--border2);margin-bottom:32px;gap:16px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:8px;display:grid;place-items:center;flex-shrink:0}
+.logo-icon svg{width:20px;height:20px;color:#000}
+.logo-text{font-family:'Syne',sans-serif;font-weight:800;font-size:1.25rem;letter-spacing:-.02em;color:var(--text)}
+.logo-sub{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-top:2px}
+.version-tag{font-size:10px;color:var(--muted);border:1px solid var(--border2);padding:3px 8px;border-radius:4px;font-family:'JetBrains Mono',monospace}
+
+/* ── sign-in ── */
+.auth-overlay{position:fixed;inset:0;background:rgba(12,12,15,.96);backdrop-filter:blur(10px);z-index:100;display:flex;align-items:center;justify-content:center}
+.auth-card{background:var(--bg2);border:1px solid var(--border2);border-radius:18px;padding:48px 40px;text-align:center;max-width:380px;width:90%}
+.auth-card h2{font-family:'Syne',sans-serif;font-weight:700;font-size:1.5rem;margin-bottom:8px}
+.auth-card p{color:var(--muted);font-size:12px;line-height:1.7;margin-bottom:32px}
+.btn-google{display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#000;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;padding:14px 24px;border-radius:10px;border:none;cursor:pointer;transition:opacity .15s}
+.btn-google:hover{opacity:.85}
+.auth-status{margin-top:14px;font-size:11px;color:var(--muted)}
+
+/* ── loading ── */
+.loading-overlay{position:fixed;inset:0;background:rgba(12,12,15,.9);z-index:90;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;display:none}
+.spinner{width:32px;height:32px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── toolbar ── */
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:24px;flex-wrap:wrap}
+.btn{font-family:'JetBrains Mono',monospace;font-size:11px;padding:8px 14px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg3);color:var(--text);cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);color:#000;border-color:var(--accent);font-weight:500}
+.btn.primary:hover{opacity:.85}
+.btn.danger{border-color:var(--danger);color:var(--danger)}
+.btn.danger:hover{background:rgba(255,77,106,.1)}
+.user-pill{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-left:auto}
+.dot-green{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0}
+
+/* ── file grid ── */
+.section-label{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin-bottom:12px}
+.files-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:40px}
+.file-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;cursor:pointer;transition:border-color .15s,background .15s;position:relative;overflow:hidden}
+.file-card:hover{border-color:var(--border2);background:var(--bg3)}
+.file-card.active{border-color:var(--accent2);background:rgba(0,212,255,.04)}
+.file-card-name{font-family:'Syne',sans-serif;font-weight:700;font-size:13px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.file-card-name .app-icon{width:22px;height:22px;border-radius:5px;font-size:10px;display:grid;place-items:center;flex-shrink:0}
+.file-meta{font-size:10px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.file-meta span{display:flex;align-items:center;gap:6px}
+.file-size{color:var(--accent2);font-weight:500}
+.file-actions{display:flex;gap:6px;margin-top:10px}
+.mini-btn{padding:5px 10px;font-size:10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;font-family:'JetBrains Mono',monospace;transition:all .15s}
+.mini-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+.mini-btn.del:hover{border-color:var(--danger);color:var(--danger)}
+
+/* ── editor panel ── */
+.editor-panel{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;overflow:hidden;display:none}
+.editor-panel.open{display:block}
+.editor-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.editor-file-name{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+.editor-file-name .badge{font-family:'JetBrains Mono',monospace;font-size:9px;padding:2px 7px;border-radius:4px;font-weight:400;background:rgba(0,212,255,.12);color:var(--accent2);border:1px solid rgba(0,212,255,.2)}
+.editor-actions{display:flex;gap:8px;flex-wrap:wrap}
+.editor-body{display:grid;grid-template-columns:1fr 1fr;min-height:500px}
+.editor-tree{border-right:1px solid var(--border);overflow-y:auto;max-height:600px}
+.editor-json{display:flex;flex-direction:column;overflow:hidden}
+.panel-label{font-size:9px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+
+/* ── tree ── */
+.tree-node{display:flex;align-items:flex-start;gap:0;cursor:pointer;padding:4px 8px;border-radius:5px;transition:background .1s;font-size:11px;line-height:1.5;position:relative;flex-wrap:wrap}
+.tree-node:hover{background:rgba(255,255,255,.04)}
+.tree-node.selected{background:rgba(0,212,255,.08)}
+.tree-indent{flex-shrink:0}
+.tree-toggle{width:14px;flex-shrink:0;color:var(--muted);text-align:center;user-select:none}
+.tree-key{color:var(--accent2);font-weight:500;word-break:break-all}
+.tree-colon{color:var(--muted);margin:0 4px}
+.tree-val{color:var(--warn);word-break:break-all;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree-val.str{color:#a8d8a8}
+.tree-val.num{color:#ffd580}
+.tree-val.bool{color:#ff9ff3}
+.tree-val.null{color:var(--muted)}
+.tree-val.obj{color:var(--muted)}
+.tree-path{font-size:9px;color:var(--muted);padding:3px 8px 3px 28px;display:none}
+.tree-node.selected + .tree-path{display:block}
+.tree-edit-icon{margin-left:auto;opacity:0;font-size:9px;color:var(--accent);padding:1px 5px;border-radius:3px;border:1px solid transparent;transition:opacity .1s}
+.tree-node:hover .tree-edit-icon{opacity:1}
+
+/* ── textarea ── */
+.json-editor{flex:1;font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg);color:var(--text);border:none;outline:none;padding:16px;resize:none;line-height:1.7;width:100%}
+.json-editor.error{background:rgba(255,77,106,.04)}
+.json-error{padding:8px 16px;font-size:10px;color:var(--danger);background:rgba(255,77,106,.08);border-top:1px solid rgba(255,77,106,.2);display:none;flex-shrink:0}
+.json-error.show{display:block}
+
+/* ── inline edit modal ── */
+.modal-bg{position:fixed;inset:0;background:rgba(12,12,15,.8);backdrop-filter:blur(6px);z-index:50;display:flex;align-items:center;justify-content:center;display:none}
+.modal-bg.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:28px;width:480px;max-width:95vw}
+.modal h3{font-family:'Syne',sans-serif;font-weight:700;margin-bottom:6px;font-size:15px}
+.modal-path{font-size:10px;color:var(--muted);margin-bottom:18px;word-break:break-all}
+.modal input,.modal textarea{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:10px 12px;outline:none;transition:border-color .15s}
+.modal input:focus,.modal textarea:focus{border-color:var(--accent2)}
+.modal textarea{min-height:120px;resize:vertical}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+
+/* ── empty / error states ── */
+.empty{text-align:center;padding:60px 20px;color:var(--muted);font-size:12px}
+.empty-icon{font-size:2.5rem;margin-bottom:12px}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:10px 18px;border-radius:8px;font-size:11px;z-index:200;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1}
+.toast.ok{border-color:rgba(127,255,110,.3);color:var(--accent)}
+.toast.err{border-color:rgba(255,77,106,.3);color:var(--danger)}
+
+/* ── tabs ── */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border2);margin-bottom:28px}
+.tab{font-family:'Syne',sans-serif;font-weight:600;font-size:12px;padding:10px 18px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);transition:all .15s;user-select:none;display:flex;align-items:center;gap:7px}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-badge{font-family:'JetBrains Mono',monospace;font-size:9px;background:var(--bg3);border:1px solid var(--border2);padding:1px 6px;border-radius:10px;color:var(--muted)}
+.tab.active .tab-badge{background:rgba(127,255,110,.1);border-color:rgba(127,255,110,.3);color:var(--accent)}
+
+/* ── localStorage panel ── */
+.ls-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.ls-search{flex:1;min-width:180px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:7px 12px;outline:none;transition:border-color .15s}
+.ls-search:focus{border-color:var(--accent2)}
+.ls-table{width:100%;border-collapse:collapse;font-size:11px}
+.ls-table th{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border2);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:500}
+.ls-table td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top;word-break:break-all}
+.ls-table tr:hover td{background:rgba(255,255,255,.02)}
+.ls-key{color:var(--accent2);font-weight:500;max-width:240px;word-break:break-all}
+.ls-val{color:var(--warn);max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
+.ls-val.json-val{color:#a8d8a8}
+.ls-size{color:var(--muted);white-space:nowrap;font-size:10px}
+.ls-actions-cell{white-space:nowrap}
+.ls-group-header{padding:10px 12px 4px;font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);border-bottom:1px solid var(--border)}
+.ls-app-section{margin-bottom:24px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.ls-app-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+.ls-app-head:hover{background:rgba(255,255,255,.02)}
+.ls-app-icon{font-size:14px}
+.ls-app-name{font-family:'Syne',sans-serif;font-weight:700;font-size:12px}
+.ls-app-count{font-size:10px;color:var(--muted)}
+.ls-app-toggle{margin-left:auto;color:var(--muted);font-size:11px;transition:transform .2s}
+.ls-add-row{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border);flex-wrap:wrap}
+.ls-add-input{flex:1;min-width:120px;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 10px;outline:none}
+.ls-add-input:focus{border-color:var(--accent)}
+.ls-add-input::placeholder{color:var(--muted)}
+
+/* ── confirm badge ── */
+.confirm-del{display:none;gap:6px;align-items:center}
+.confirm-del.show{display:flex}
+
+@media(max-width:680px){
+  .editor-body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .editor-tree{border-right:none;border-bottom:1px solid var(--border);max-height:280px}
+  header{padding:20px 0 16px}
+}
+</style>
+</head>
+<body>
+
+<!-- AUTH OVERLAY -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-card">
+    <div style="font-size:2rem;margin-bottom:12px">🗄</div>
+    <h2>Drive Manager</h2>
+    <p>Accédez et gérez les données JSON de vos applications web stockées dans Google Drive (espace appDataFolder privé).</p>
+    <button class="btn-google" onclick="driveSignIn()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Se connecter avec Google
+    </button>
+    <div class="auth-status" id="authStatus"></div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div style="font-size:11px;color:var(--muted)">Connexion…</div>
+</div>
+
+<!-- INLINE EDIT MODAL -->
+<div class="modal-bg" id="editModal">
+  <div class="modal">
+    <h3 id="editModalTitle">Modifier la valeur</h3>
+    <div class="modal-path" id="editModalPath"></div>
+    <textarea id="editModalInput" rows="4"></textarea>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeEditModal()">Annuler</button>
+      <button class="btn primary" onclick="applyEdit()">Appliquer</button>
+    </div>
+  </div>
+</div>
+
+<!-- LS EDIT MODAL -->
+<div class="modal-bg" id="lsEditModal">
+  <div class="modal">
+    <h3 id="lsEditTitle">Modifier la clé</h3>
+    <div class="modal-path" id="lsEditKey"></div>
+    <textarea id="lsEditValue" rows="6"></textarea>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeLsEditModal()">Annuler</button>
+      <button class="btn primary" onclick="saveLsEdit()">Appliquer</button>
+    </div>
+  </div>
+</div>
+
+<!-- LS DELETE MODAL -->
+<div class="modal-bg" id="lsDeleteModal">
+  <div class="modal">
+    <h3>Supprimer la clé ?</h3>
+    <div class="modal-path" id="lsDeleteKey" style="margin-bottom:20px"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:20px">La clé sera supprimée du localStorage du navigateur.</div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeLsDeleteModal()">Annuler</button>
+      <button class="btn danger" onclick="confirmLsDelete()">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM DELETE MODAL -->
+<div class="modal-bg" id="deleteModal">
+  <div class="modal">
+    <h3>Supprimer le fichier ?</h3>
+    <div class="modal-path" id="deleteModalName" style="margin-bottom:20px"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:20px">Cette action est irréversible. Le fichier sera définitivement supprimé de Google Drive.</div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeDeleteModal()">Annuler</button>
+      <button class="btn danger" onclick="confirmDelete()">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="shell">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </div>
+      <div>
+        <div class="logo-text">Drive Manager</div>
+        <div class="logo-sub">appDataFolder inspector</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="user-pill" id="userPill" style="display:none">
+        <div class="dot-green"></div>
+        <span id="userEmail"></span>
+        <button class="mini-btn" onclick="signOut()">Déconnecter</button>
+      </div>
+      <div class="version-tag">v1.0.0</div>
+    </div>
+  </header>
+
+      <div class="version-tag" id="versionTag">v1.1.0</div>
+    </div>
+  </header>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" id="tab-drive" onclick="switchTab('drive')">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      Google Drive
+      <span class="tab-badge" id="drive-tab-count">0</span>
+    </div>
+    <div class="tab" id="tab-ls" onclick="switchTab('ls')">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+      LocalStorage
+      <span class="tab-badge" id="ls-tab-count">0</span>
+    </div>
+  </div>
+
+  <!-- DRIVE SECTION -->
+  <div id="driveSection">
+    <div class="toolbar">
+      <button class="btn primary" onclick="refreshFiles()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Actualiser
+      </button>
+      <span style="font-size:11px;color:var(--muted)" id="fileCount"></span>
+    </div>
+    <div class="section-label">Fichiers JSON dans appDataFolder</div>
+    <div class="files-grid" id="filesGrid">
+      <div class="empty"><div class="empty-icon">☁</div><div>Connectez-vous pour voir vos fichiers</div></div>
+    </div>
+    <!-- EDITOR -->
+    <div class="editor-panel" id="editorPanel">
+      <div class="editor-header">
+        <div class="editor-file-name">
+          <span id="editorFileName">—</span>
+          <span class="badge" id="editorFileId"></span>
+        </div>
+        <div class="editor-actions">
+          <button class="btn" onclick="closeEditor()">✕ Fermer</button>
+          <button class="btn" onclick="formatJson()">{ } Formater</button>
+          <button class="btn primary" onclick="saveFile()">⬆ Sauvegarder</button>
+        </div>
+      </div>
+      <div class="editor-body">
+        <div class="editor-tree">
+          <div class="panel-label">Arbre de données</div>
+          <div id="treeRoot" style="padding:8px"></div>
+        </div>
+        <div class="editor-json">
+          <div class="panel-label">JSON brut — éditable</div>
+          <textarea class="json-editor" id="jsonEditor" spellcheck="false" oninput="onJsonInput()"></textarea>
+          <div class="json-error" id="jsonError"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOCALSTORAGE SECTION -->
+  <div id="lsSection" style="display:none">
+    <div class="ls-toolbar">
+      <button class="btn primary" onclick="renderLs()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Actualiser
+      </button>
+      <input class="ls-search" type="search" id="lsSearch" placeholder="Filtrer les clés…" oninput="renderLs()" />
+      <button class="btn" onclick="openLsAdd()">+ Ajouter</button>
+      <button class="btn danger" onclick="lsClearAll()">🗑 Tout effacer</button>
+    </div>
+    <div id="lsContent"></div>
+  </div>
+</div>
+
+<script>
+const APP_VERSION  = '1.1.0';
+const CLIENT_ID    = '68487410553-mp697niljk1ov3sn2ucjfe8ckkqds48p.apps.googleusercontent.com';
+const SCOPE        = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email';
+
+// Known app files for display names
+const APP_MAP = {
+  'carnet_croissance.json':  { name: 'Carnet de Croissance', icon: '📏', color: '#3d6b4f' },
+  'mes_calendriers.json':    { name: 'Mes Calendriers',      icon: '📅', color: '#7c3aed' },
+  'mes_taches.json':         { name: 'Mes Tâches',           icon: '📋', color: '#d97706' },
+  'mes_favoris.json':        { name: 'Mes Favoris',          icon: '⭐', color: '#db2777' },
+  'centraliseur_apps.json':  { name: 'Centraliseur Apps',    icon: '🔧', color: '#0891b2' },
+};
+
+// Known LS key prefixes per app
+const LS_APP_MAP = [
+  { prefix: 'cc.drive.',              name: 'Carnet de Croissance', icon: '📏', color: '#3d6b4f' },
+  { prefix: 'croissance_',            name: 'Carnet de Croissance', icon: '📏', color: '#3d6b4f' },
+  { prefix: 'cal.drive.',             name: 'Mes Calendriers',      icon: '📅', color: '#7c3aed' },
+  { prefix: 'suiviSante.',            name: 'Mes Calendriers',      icon: '📅', color: '#7c3aed' },
+  { prefix: 'mt.drive.',              name: 'Mes Tâches',           icon: '📋', color: '#d97706' },
+  { prefix: 'mes-taches',             name: 'Mes Tâches',           icon: '📋', color: '#d97706' },
+  { prefix: 'mf.drive.',              name: 'Mes Favoris',          icon: '⭐', color: '#db2777' },
+  { prefix: 'ca.drive.',              name: 'Centraliseur Apps',    icon: '🔧', color: '#0891b2' },
+  { prefix: 'centraliseur-apps',      name: 'Centraliseur Apps',    icon: '🔧', color: '#0891b2' },
+  { prefix: 'dm_',                    name: 'Drive Manager',        icon: '🗄', color: '#6b7280' },
+];
+
+// ── TABS ──
+let currentTab = 'drive';
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('driveSection').style.display = tab === 'drive' ? '' : 'none';
+  document.getElementById('lsSection').style.display   = tab === 'ls'    ? '' : 'none';
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + tab));
+  if (tab === 'ls') renderLs();
+}
+
+// ── LocalStorage ──
+let _lsEditKey = null;
+let _lsDeleteKey = null;
+
+function getGroupedLsKeys(filter = '') {
+  const all = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (filter && !key.toLowerCase().includes(filter.toLowerCase())) continue;
+    const app = LS_APP_MAP.find(a => key.startsWith(a.prefix));
+    const group = app ? app.name : '🔧 Autres';
+    const meta = app || { name: '🔧 Autres', icon: '⚙', color: '#6b7280' };
+    if (!all[group]) all[group] = { meta, keys: [] };
+    all[group].keys.push(key);
+  }
+  // sort keys within groups
+  Object.values(all).forEach(g => g.keys.sort());
+  return all;
+}
+
+function lsValuePreview(val) {
+  try {
+    JSON.parse(val);
+    return { display: val.length > 80 ? val.slice(0, 80) + '…' : val, isJson: true };
+  } catch(e) {
+    return { display: val.length > 80 ? val.slice(0, 80) + '…' : val, isJson: false };
+  }
+}
+
+function renderLs() {
+  const filter = document.getElementById('lsSearch')?.value || '';
+  const groups = getGroupedLsKeys(filter);
+  const total = localStorage.length;
+  document.getElementById('ls-tab-count').textContent = total;
+
+  const container = document.getElementById('lsContent');
+  if (total === 0) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">💾</div><div>LocalStorage vide</div></div>';
+    return;
+  }
+
+  const groupNames = Object.keys(groups).sort((a,b) => a === '🔧 Autres' ? 1 : b === '🔧 Autres' ? -1 : a.localeCompare(b));
+  if (!groupNames.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div>Aucune clé correspondante</div></div>';
+    return;
+  }
+
+  container.innerHTML = groupNames.map(groupName => {
+    const { meta, keys } = groups[groupName];
+    const rows = keys.map(key => {
+      const raw = localStorage.getItem(key) || '';
+      const { display, isJson } = lsValuePreview(raw);
+      const size = new Blob([raw]).size;
+      return `<tr>
+        <td class="ls-key">${escHtml(key)}</td>
+        <td><div class="ls-val ${isJson ? 'json-val' : ''}">${escHtml(display)}</div></td>
+        <td class="ls-size">${formatSize(size)}</td>
+        <td class="ls-actions-cell">
+          <span style="display:flex;gap:5px">
+            <button class="mini-btn" onclick="openLsEdit('${escHtml(key)}')">✎</button>
+            <button class="mini-btn del" onclick="openLsDelete('${escHtml(key)}')">🗑</button>
+          </span>
+        </td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="ls-app-section">
+      <div class="ls-app-head" onclick="toggleLsGroup(this)">
+        <span class="ls-app-icon">${meta.icon}</span>
+        <span class="ls-app-name" style="color:${meta.color}">${escHtml(meta.name !== '🔧 Autres' ? meta.name : 'Autres')}</span>
+        <span class="ls-app-count">${keys.length} clé(s)</span>
+        <span class="ls-app-toggle">▾</span>
+      </div>
+      <div class="ls-group-body">
+        <table class="ls-table">
+          <thead><tr><th>Clé</th><th>Valeur</th><th>Taille</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleLsGroup(headEl) {
+  const body = headEl.nextElementSibling;
+  const toggle = headEl.querySelector('.ls-app-toggle');
+  const hidden = body.style.display === 'none';
+  body.style.display = hidden ? '' : 'none';
+  toggle.textContent = hidden ? '▾' : '▸';
+  toggle.style.transform = hidden ? '' : 'rotate(-90deg)';
+}
+
+function openLsEdit(key) {
+  _lsEditKey = key;
+  document.getElementById('lsEditTitle').textContent = 'Modifier : ' + key;
+  document.getElementById('lsEditKey').textContent = key;
+  const raw = localStorage.getItem(key) || '';
+  // pretty-print if JSON
+  let display = raw;
+  try { display = JSON.stringify(JSON.parse(raw), null, 2); } catch(e) {}
+  document.getElementById('lsEditValue').value = display;
+  document.getElementById('lsEditModal').classList.add('open');
+  setTimeout(() => document.getElementById('lsEditValue').focus(), 100);
+}
+function closeLsEditModal() { document.getElementById('lsEditModal').classList.remove('open'); _lsEditKey = null; }
+
+function saveLsEdit() {
+  if (!_lsEditKey) return;
+  let val = document.getElementById('lsEditValue').value;
+  // If user entered pretty JSON, minify back for storage
+  try { val = JSON.stringify(JSON.parse(val)); } catch(e) { /* keep as-is */ }
+  localStorage.setItem(_lsEditKey, val);
+  closeLsEditModal();
+  renderLs();
+  showToast('Clé mise à jour ✓', 'ok');
+}
+
+function openLsDelete(key) {
+  _lsDeleteKey = key;
+  document.getElementById('lsDeleteKey').textContent = key;
+  document.getElementById('lsDeleteModal').classList.add('open');
+}
+function closeLsDeleteModal() { document.getElementById('lsDeleteModal').classList.remove('open'); _lsDeleteKey = null; }
+
+function confirmLsDelete() {
+  if (!_lsDeleteKey) return;
+  localStorage.removeItem(_lsDeleteKey);
+  closeLsDeleteModal();
+  renderLs();
+  showToast('Clé supprimée', 'ok');
+}
+
+function lsClearAll() {
+  if (!confirm('Effacer TOUTES les clés du localStorage ?\nCette action est irréversible.')) return;
+  localStorage.clear();
+  renderLs();
+  showToast('LocalStorage vidé', 'ok');
+}
+
+function openLsAdd() {
+  const key = prompt('Nom de la clé :');
+  if (!key) return;
+  const val = prompt('Valeur (texte ou JSON) :', '');
+  if (val === null) return;
+  localStorage.setItem(key, val);
+  renderLs();
+  showToast('Clé ajoutée ✓', 'ok');
+}
+
+// ── LS modals close on bg click ──
+document.getElementById('lsEditModal').addEventListener('click', e => { if (e.target === document.getElementById('lsEditModal')) closeLsEditModal(); });
+document.getElementById('lsDeleteModal').addEventListener('click', e => { if (e.target === document.getElementById('lsDeleteModal')) closeLsDeleteModal(); });
+
+let tokenClient = null;
+let accessToken = null;
+let currentFiles = [];
+let activeFileId = null;
+let activeFileName = null;
+let _editPath = [];
+let _deleteFileId = null;
+let _initResolve = null;
+const initReady = new Promise(r => { _initResolve = r; });
+
+// ── INIT ──
+function loadLibs() {
+  return new Promise(resolve => {
+    let g = false, gi = false;
+    const ok = () => { if (g && gi) resolve(); };
+    const s1 = document.createElement('script'); s1.src = 'https://apis.google.com/js/api.js';
+    s1.onload = () => { gapi.load('client', async () => { await gapi.client.init({}); g = true; ok(); }); };
+    document.head.appendChild(s1);
+    const s2 = document.createElement('script'); s2.src = 'https://accounts.google.com/gsi/client';
+    s2.onload = () => { gi = true; ok(); }; document.head.appendChild(s2);
+  });
+}
+
+async function boot() {
+  await loadLibs();
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID, scope: SCOPE,
+    callback: async resp => {
+      hideLoading();
+      if (resp.error) { setAuthStatus('Connexion échouée : ' + resp.error); return; }
+      accessToken = resp.access_token;
+      gapi.client.setToken({ access_token: accessToken });
+      document.getElementById('authOverlay').style.display = 'none';
+      await loadUserInfo();
+      await refreshFiles();
+    }
+  });
+  _initResolve();
+  // Auto-reconnect if hint exists
+  const hint = sessionStorage.getItem('dm_hint') || localStorage.getItem('dm_hint') || '';
+  if (hint) { showLoading(); tokenClient.requestAccessToken({ prompt: 'none', login_hint: hint }); }
+}
+
+async function driveSignIn() {
+  await initReady;
+  tokenClient.requestAccessToken({ prompt: 'select_account' });
+}
+
+function signOut() {
+  if (accessToken) google.accounts.oauth2.revoke(accessToken);
+  accessToken = null;
+  localStorage.removeItem('dm_hint'); sessionStorage.removeItem('dm_hint');
+  currentFiles = []; activeFileId = null;
+  document.getElementById('authOverlay').style.display = 'flex';
+  document.getElementById('userPill').style.display = 'none';
+  document.getElementById('editorPanel').classList.remove('open');
+  renderFiles([]);
+}
+
+async function loadUserInfo() {
+  try {
+    const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + accessToken } });
+    const d = await r.json();
+    if (d.email) {
+      document.getElementById('userEmail').textContent = d.email;
+      document.getElementById('userPill').style.display = 'flex';
+      localStorage.setItem('dm_hint', d.email); sessionStorage.setItem('dm_hint', d.email);
+    }
+  } catch(e) {}
+}
+
+function showLoading() { document.getElementById('loadingOverlay').style.display = 'flex'; }
+function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
+function setAuthStatus(msg) { document.getElementById('authStatus').textContent = msg; }
+
+// ── FILES ──
+async function refreshFiles() {
+  if (!accessToken) return;
+  showLoading();
+  try {
+    const resp = await fetch(
+      "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name,size,modifiedTime,mimeType)&pageSize=100",
+      { headers: { Authorization: 'Bearer ' + accessToken } }
+    );
+    const data = await resp.json();
+    currentFiles = (data.files || []).sort((a,b) => a.name.localeCompare(b.name));
+    renderFiles(currentFiles);
+    document.getElementById('drive-tab-count').textContent = currentFiles.length;
+  } catch(e) { showToast('Erreur lors du chargement', 'err'); }
+  hideLoading();
+}
+
+function renderFiles(files) {
+  const grid = document.getElementById('filesGrid');
+  document.getElementById('fileCount').textContent = files.length ? files.length + ' fichier(s)' : '';
+  if (!files.length) {
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div>Aucun fichier dans appDataFolder</div></div>';
+    return;
+  }
+  grid.innerHTML = files.map(f => {
+    const app = APP_MAP[f.name] || { name: f.name, icon: '📄', color: '#6b7280' };
+    const size = f.size ? formatSize(+f.size) : '—';
+    const date = f.modifiedTime ? new Date(f.modifiedTime).toLocaleString('fr-FR') : '—';
+    const isActive = f.id === activeFileId;
+    return `
+    <div class="file-card ${isActive ? 'active' : ''}" data-id="${f.id}" data-name="${escHtml(f.name)}">
+      <div class="file-card-name">
+        <div class="app-icon" style="background:${app.color}22;border:1px solid ${app.color}44;font-size:12px">${app.icon}</div>
+        ${escHtml(app.name !== f.name ? app.name : f.name)}
+      </div>
+      <div class="file-meta">
+        <span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>${escHtml(f.name)}</span>
+        <span>⚖ <span class="file-size">${size}</span> · 🕐 ${date}</span>
+      </div>
+      <div class="file-actions">
+        <button class="mini-btn" onclick="openFile('${f.id}','${escHtml(f.name)}')">✎ Éditer</button>
+        <button class="mini-btn del" onclick="openDeleteModal('${f.id}','${escHtml(f.name)}')">🗑 Supprimer</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' o';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' Ko';
+  return (bytes/(1024*1024)).toFixed(2) + ' Mo';
+}
+
+// ── EDITOR ──
+async function openFile(fileId, fileName) {
+  showLoading();
+  try {
+    const resp = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      { headers: { Authorization: 'Bearer ' + accessToken } }
+    );
+    const text = await resp.text();
+    activeFileId = fileId;
+    activeFileName = fileName;
+    document.getElementById('editorFileName').textContent = APP_MAP[fileName]?.name || fileName;
+    document.getElementById('editorFileId').textContent = fileId.slice(0, 12) + '…';
+    const formatted = tryFormat(text);
+    document.getElementById('jsonEditor').value = formatted;
+    document.getElementById('jsonEditor').classList.remove('error');
+    document.getElementById('jsonError').classList.remove('show');
+    renderTree(formatted);
+    document.getElementById('editorPanel').classList.add('open');
+    document.getElementById('editorPanel').scrollIntoView({ behavior: 'smooth' });
+    // mark active card
+    document.querySelectorAll('.file-card').forEach(c => c.classList.toggle('active', c.dataset.id === fileId));
+  } catch(e) { showToast('Erreur lors de la lecture', 'err'); }
+  hideLoading();
+}
+
+function closeEditor() {
+  document.getElementById('editorPanel').classList.remove('open');
+  activeFileId = null;
+  document.querySelectorAll('.file-card').forEach(c => c.classList.remove('active'));
+}
+
+function tryFormat(text) {
+  try { return JSON.stringify(JSON.parse(text), null, 2); } catch(e) { return text; }
+}
+
+function onJsonInput() {
+  const val = document.getElementById('jsonEditor').value;
+  const errorEl = document.getElementById('jsonError');
+  const editorEl = document.getElementById('jsonEditor');
+  try {
+    JSON.parse(val);
+    editorEl.classList.remove('error');
+    errorEl.classList.remove('show');
+    renderTree(val);
+  } catch(e) {
+    editorEl.classList.add('error');
+    errorEl.textContent = e.message;
+    errorEl.classList.add('show');
+  }
+}
+
+function formatJson() {
+  const val = document.getElementById('jsonEditor').value;
+  try {
+    document.getElementById('jsonEditor').value = JSON.stringify(JSON.parse(val), null, 2);
+    document.getElementById('jsonEditor').classList.remove('error');
+    document.getElementById('jsonError').classList.remove('show');
+    showToast('JSON formaté', 'ok');
+  } catch(e) { showToast('JSON invalide', 'err'); }
+}
+
+async function saveFile() {
+  if (!activeFileId) return;
+  const val = document.getElementById('jsonEditor').value;
+  try { JSON.parse(val); } catch(e) { showToast('JSON invalide, corrigez avant de sauvegarder', 'err'); return; }
+  showLoading();
+  try {
+    const resp = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${activeFileId}?uploadType=media`,
+      { method: 'PATCH', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, body: val }
+    );
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    showToast('Fichier sauvegardé ✓', 'ok');
+    await refreshFiles();
+  } catch(e) { showToast('Erreur sauvegarde : ' + e.message, 'err'); }
+  hideLoading();
+}
+
+// ── DELETE ──
+function openDeleteModal(fileId, fileName) {
+  _deleteFileId = fileId;
+  document.getElementById('deleteModalName').textContent = APP_MAP[fileName]?.name || fileName + ' (' + fileName + ')';
+  document.getElementById('deleteModal').classList.add('open');
+}
+function closeDeleteModal() { document.getElementById('deleteModal').classList.remove('open'); _deleteFileId = null; }
+
+async function confirmDelete() {
+  if (!_deleteFileId) return;
+  closeDeleteModal();
+  showLoading();
+  try {
+    const resp = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${_deleteFileId}`,
+      { method: 'DELETE', headers: { Authorization: 'Bearer ' + accessToken } }
+    );
+    if (resp.status !== 204 && !resp.ok) throw new Error('HTTP ' + resp.status);
+    if (activeFileId === _deleteFileId) closeEditor();
+    showToast('Fichier supprimé', 'ok');
+    await refreshFiles();
+  } catch(e) { showToast('Erreur suppression : ' + e.message, 'err'); }
+  hideLoading();
+}
+
+// ── TREE ──
+function renderTree(jsonText) {
+  const root = document.getElementById('treeRoot');
+  try {
+    const data = JSON.parse(jsonText);
+    root.innerHTML = '';
+    buildTree(root, data, [], 0);
+  } catch(e) {
+    root.innerHTML = '<div style="padding:8px;font-size:10px;color:var(--danger)">JSON invalide</div>';
+  }
+}
+
+function buildTree(container, data, path, depth) {
+  if (depth > 8) return; // avoid infinite nesting
+  const isObj = data !== null && typeof data === 'object';
+  const isArr = Array.isArray(data);
+  const keys = isObj ? (isArr ? [...data.keys()] : Object.keys(data)) : [];
+
+  if (isObj && keys.length === 0) {
+    // empty obj/arr — nothing to show
+    return;
+  }
+
+  keys.forEach(key => {
+    const val = isArr ? data[key] : data[key];
+    const childPath = [...path, key];
+    const isNested = val !== null && typeof val === 'object';
+    const wrap = document.createElement('div');
+
+    const node = document.createElement('div');
+    node.className = 'tree-node';
+    node.style.paddingLeft = (depth * 14 + 8) + 'px';
+
+    const toggle = document.createElement('span');
+    toggle.className = 'tree-toggle';
+    toggle.textContent = isNested ? (Array.isArray(val) ? '▸' : '▸') : ' ';
+
+    const keyEl = document.createElement('span');
+    keyEl.className = 'tree-key';
+    keyEl.textContent = String(key);
+
+    const colon = document.createElement('span');
+    colon.className = 'tree-colon';
+    colon.textContent = ': ';
+
+    const valEl = document.createElement('span');
+    valEl.className = 'tree-val';
+    if (val === null) { valEl.classList.add('null'); valEl.textContent = 'null'; }
+    else if (typeof val === 'boolean') { valEl.classList.add('bool'); valEl.textContent = String(val); }
+    else if (typeof val === 'number') { valEl.classList.add('num'); valEl.textContent = String(val); }
+    else if (typeof val === 'string') { valEl.classList.add('str'); valEl.textContent = '"' + (val.length > 60 ? val.slice(0, 60) + '…' : val) + '"'; }
+    else if (Array.isArray(val)) { valEl.classList.add('obj'); valEl.textContent = '[' + val.length + ']'; }
+    else if (typeof val === 'object') { valEl.classList.add('obj'); valEl.textContent = '{' + Object.keys(val).length + '}'; }
+
+    const editIcon = document.createElement('span');
+    editIcon.className = 'tree-edit-icon';
+    editIcon.textContent = '✎';
+
+    node.appendChild(toggle);
+    node.appendChild(keyEl);
+    node.appendChild(colon);
+    node.appendChild(valEl);
+    if (!isNested) node.appendChild(editIcon);
+
+    // Click: edit leaf or toggle object
+    node.addEventListener('click', () => {
+      if (isNested) {
+        const childContainer = wrap.querySelector('.tree-children');
+        if (childContainer) {
+          const hidden = childContainer.style.display === 'none';
+          childContainer.style.display = hidden ? '' : 'none';
+          toggle.textContent = hidden ? '▾' : '▸';
+        }
+      } else {
+        openEditModal(childPath, val);
+      }
+    });
+
+    wrap.appendChild(node);
+
+    if (isNested) {
+      const childContainer = document.createElement('div');
+      childContainer.className = 'tree-children';
+      buildTree(childContainer, val, childPath, depth + 1);
+      wrap.appendChild(childContainer);
+    }
+
+    container.appendChild(wrap);
+  });
+}
+
+// ── INLINE EDIT ──
+function openEditModal(path, currentVal) {
+  _editPath = path;
+  document.getElementById('editModalTitle').textContent = 'Modifier : ' + path[path.length - 1];
+  document.getElementById('editModalPath').textContent = path.join(' → ');
+  const display = typeof currentVal === 'object' ? JSON.stringify(currentVal, null, 2) : String(currentVal ?? '');
+  document.getElementById('editModalInput').value = display;
+  document.getElementById('editModal').classList.add('open');
+  setTimeout(() => document.getElementById('editModalInput').focus(), 100);
+}
+
+function closeEditModal() { document.getElementById('editModal').classList.remove('open'); }
+
+function applyEdit() {
+  const raw = document.getElementById('editModalInput').value;
+  const editor = document.getElementById('jsonEditor');
+  let json;
+  try { json = JSON.parse(editor.value); } catch(e) { showToast('JSON de base invalide', 'err'); return; }
+
+  // Navigate to parent and set value
+  let node = json;
+  for (let i = 0; i < _editPath.length - 1; i++) {
+    node = node[_editPath[i]];
+    if (node === undefined || node === null) { showToast('Chemin introuvable', 'err'); return; }
+  }
+  const lastKey = _editPath[_editPath.length - 1];
+
+  // Try to parse as JSON, else keep as string
+  let newVal;
+  try { newVal = JSON.parse(raw); } catch(e) { newVal = raw; }
+
+  node[lastKey] = newVal;
+  const formatted = JSON.stringify(json, null, 2);
+  editor.value = formatted;
+  editor.classList.remove('error');
+  document.getElementById('jsonError').classList.remove('show');
+  renderTree(formatted);
+  closeEditModal();
+  showToast('Valeur modifiée (pensez à sauvegarder)', 'ok');
+}
+
+// ── TOAST ──
+let _toastTimer = null;
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+function escHtml(v) {
+  return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Close modals on bg click
+document.getElementById('editModal').addEventListener('click', e => { if (e.target === document.getElementById('editModal')) closeEditModal(); });
+document.getElementById('deleteModal').addEventListener('click', e => { if (e.target === document.getElementById('deleteModal')) closeDeleteModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeEditModal(); closeDeleteModal(); closeLsEditModal(); closeLsDeleteModal(); } });
+
+// Boot
+document.getElementById('versionTag').textContent = 'v' + APP_VERSION;
+document.getElementById('ls-tab-count').textContent = localStorage.length;
+boot();
+</script>
+</body>
+</html>
