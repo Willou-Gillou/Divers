@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Historique des Températures (v0.2.2)</title>
+    <title>Historique des Températures (v0.2.3)</title>
     
-    <!-- Bibliothèques JS -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
@@ -280,7 +279,7 @@
         }
         .overlay.active { display: block; opacity: 1; }
         
-        /* DRIVE UI */
+        /* DRIVE UI OVERLAYS */
         .drive-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:8px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;pointer-events:none;opacity:0;transition:opacity 0.3s;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.25);color:#fff;background:rgba(30,30,46,0.92);}
         .drive-login-overlay{position:fixed;inset:0;background:rgba(244,246,250,0.97);z-index:300;display:none;align-items:center;justify-content:center;flex-direction:column;gap:20px;}
         .drive-login-overlay.open{display:flex;}
@@ -335,7 +334,6 @@
             <span class="version" id="versionDisplay"></span>
         </h2>
         
-        <!-- Graphique 1 : Horaire (Piscine) - EN PREMIER -->
         <div class="chart-section" id="hourlySection">
             <div class="dropzone-hint">Relâchez le fichier Horaire ici</div>
             <div class="chart-title">Température piscine par heure</div>
@@ -344,7 +342,6 @@
             </div>
         </div>
         
-        <!-- Graphique 2 : Journalier (Piscine & Air) - EN DEUXIEME -->
         <div class="chart-section" id="dailySection">
             <div class="dropzone-hint">Relâchez le fichier Journalier ici</div>
             <div class="controls-row">
@@ -375,7 +372,6 @@
         </div>
     </div>
     
-    <!-- GOOGLE DRIVE: Login overlay -->
     <div class="drive-login-overlay" id="driveLoginOverlay">
       <div style="text-align:center;max-width:360px;padding:0 24px;">
         <div style="font-size:2rem;margin-bottom:8px;">☁️</div>
@@ -385,14 +381,12 @@
       </div>
     </div>
 
-    <!-- GOOGLE DRIVE: Loading overlay -->
     <div class="drive-loading-overlay" id="driveLoadingOverlay">
       <div style="font-size:1.4rem;font-weight:700;color:#222;">Synchronisation...</div>
       <div style="font-size:0.9rem;color:#666;" id="loadingMsgText">Connexion à Google Drive…</div>
       <div style="width:36px;height:36px;border:3px solid #ddd;border-top-color:#3498db;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
     </div>
 
-    <!-- GOOGLE DRIVE: Update prompt -->
     <div class="drive-update-overlay" id="driveUpdateOverlay">
       <div class="drive-update-card">
         <div style="font-weight:700;font-size:16px;">☁️ Mise à jour disponible</div>
@@ -405,20 +399,32 @@
     </div>
 
     <script>
-        // CORE APP SETTINGS
-        const APP_VERSION = 'v0.2.2';
+        // APP SETTINGS
+        const APP_VERSION = 'v0.2.3';
         document.getElementById('versionDisplay').textContent = APP_VERSION;
         
-        // GLOBALS
+        // GLOBAL GRAPH INSTANCES
         let dailyChartInstance = null;
         let hourlyChartInstance = null;
         
+        // APP CONFIG DATA MEMORY
         let appData = {
             startDate: '2024-01-01',
             userPostalCode: '',
             poolDailyData: {},
             poolHourlyData: {}
         };
+        
+        // 1. ARCHITECTURE PERSISTANCE - CHARGEMENT IMMEDIAT DU CACHE MIROIR AVANT LES API
+        const localCache = localStorage.getItem('appData_cache');
+        if (localCache) {
+            try {
+                appData = JSON.parse(localCache);
+                console.log("[Cache] Données et réglages restaurés instantanément.");
+            } catch(e) {
+                console.error("[Cache] Erreur lors de la lecture du cache", e);
+            }
+        }
         
         /* ---------------- GOOGLE DRIVE SYNC ---------------- */
         const DRIVE_FILE_NAME = 'historique_temperatures_piscine.json';
@@ -456,37 +462,26 @@
         
         async function loadGoogleAPIs() {
             try {
-                console.log("[App] Chargement de Google API Client...");
                 await loadScript('https://apis.google.com/js/api.js');
-                console.log("[App] Chargement de Google Identity Services...");
                 await loadScript('https://accounts.google.com/gsi/client');
-                
                 await new Promise((resolve) => {
                     gapi.load('client', async () => {
                         await gapi.client.init({});
                         resolve();
                     });
                 });
-                console.log("[App] Google APIs initialisées avec succès.");
                 googleApisLoaded = true;
                 return true;
             } catch (err) {
-                console.error("[App] Erreur critique lors du chargement des APIs Google (Bloqueur de pub ou réseau ?):", err);
-                document.getElementById('drawerDriveStatus').innerHTML = "<span style='color:#e74c3c'>Erreur JS : Google API bloqué ou non disponible.<br>L'app fonctionnera en mode local.</span>";
+                console.warn("[Drive] Mode Local actif (API Google non joignable).");
+                document.getElementById('drawerDriveStatus').innerHTML = "<span style='color:#bdc3c7;font-size:11px;'>Mode Local Actif (Hors Ligne)</span>";
                 return false;
             }
         }
         
         async function driveInit(){
-            migrateLocalStorageToDriveMemory();
-            
             const apisReady = await loadGoogleAPIs();
-            if (!apisReady) {
-                updateUIFromMemory();
-                afficherGraphiqueHoraire();
-                chargerDonneesJournalieres();
-                return;
-            }
+            if (!apisReady) return;
             
             const hint = localStorage.getItem(DRIVE_LS+'hint')||'';
             try {
@@ -494,10 +489,9 @@
                     client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPE, login_hint: hint,
                     callback: async(resp)=>{
                         if(resp.error){ 
-                            console.error("Auth error:", resp.error);
                             driveHideLoading(); 
                             driveShowLogin(true);
-                            document.getElementById('drawerDriveStatus').innerHTML = "<span style='color:#e74c3c'>Auth Error: " + resp.error + "</span>";
+                            document.getElementById('drawerDriveStatus').innerHTML = "<span style='color:#e74c3c'>Erreur Auth</span>";
                             return; 
                         }
                         driveAccessToken = resp.access_token;
@@ -512,26 +506,19 @@
                     }
                 });
             } catch (e) {
-                console.error("Failed to init token client:", e);
-                document.getElementById('drawerDriveStatus').innerHTML = "<span style='color:#e74c3c'>Erreur OAuth. Vérifiez Authorized Origins.</span>";
+                document.getElementById('drawerDriveStatus').innerHTML = "<span style='color:#e74c3c'>Erreur de configuration OAuth</span>";
             }
             
             if (localStorage.getItem(DRIVE_LS+'connected')==='1') {
                 driveShowLoading();
                 driveTokenClient.requestAccessToken({prompt:''});
             } else {
-                updateUIFromMemory();
-                afficherGraphiqueHoraire();
-                chargerDonneesJournalieres();
                 updateDriveStatusUI(); 
             }
         }
         
         function driveSignIn(){
-            if(!driveTokenClient) {
-                alert("Client d'authentification non prêt. Vérifiez les logs console.");
-                return;
-            }
+            if(!driveTokenClient) return;
             driveTokenClient.requestAccessToken({prompt:'select_account'});
         }
         
@@ -545,10 +532,6 @@
             localStorage.removeItem(DRIVE_LS+'last_sync_iso');
             driveStopPolling();
             driveShowLogin(true);
-            appData = {startDate:'2024-01-01', userPostalCode:'', poolDailyData:{}, poolHourlyData:{}};
-            updateUIFromMemory();
-            afficherGraphiqueHoraire();
-            chargerDonneesJournalieres();
             updateDriveStatusUI();
         }
         
@@ -581,7 +564,7 @@
             if(!driveAccessToken) return;
             clearTimeout(driveAutoSaveTimer);
             driveAutoSaveTimer = setTimeout(async ()=>{
-                driveToast('☁️ Sauvegarde…');
+                driveToast('☁️ Sauvegarde Cloud…');
                 try {
                     const payload = JSON.stringify(appData, null, 2);
                     const fileId = await driveGetFileId();
@@ -600,7 +583,7 @@
                         const iso = cd.modifiedTime || new Date().toISOString();
                         localStorage.setItem(DRIVE_LS+'last_sync_iso', iso);
                         localStorage.setItem(DRIVE_LS+'last_sync', new Date(iso).toLocaleString('fr-FR'));
-                        driveToast('✅ Sauvegardé');
+                        driveToast('✅ Sauvegardé Cloud');
                         updateDriveStatusUI();
                         return;
                     }
@@ -609,20 +592,21 @@
                     const iso = data.modifiedTime || new Date().toISOString();
                     localStorage.setItem(DRIVE_LS+'last_sync_iso', iso);
                     localStorage.setItem(DRIVE_LS+'last_sync', new Date(iso).toLocaleString('fr-FR'));
-                    driveToast('✅ Sauvegardé');
+                    driveToast('✅ Sauvegardé Cloud');
                     updateDriveStatusUI();
                 } catch(e) {
-                    console.error("Drive save error:", e);
-                    driveToast('⚠️ Erreur sync', true);
+                    driveToast('⚠️ Erreur Cloud', true);
                 }
             }, 2500);
         }
         
         function forceDataSave() {
+            // Écriture instantanée dans le cache local
+            localStorage.setItem('appData_cache', JSON.stringify(appData));
+            
+            // Écriture décalée sur le Drive si connecté
             if(googleApisLoaded && driveAccessToken) {
                 driveSave();
-            } else {
-                localStorage.setItem('localFallbackData', JSON.stringify(appData));
             }
             updateUIFromMemory();
         }
@@ -670,7 +654,6 @@
                 document.getElementById('driveUpdateOverlay').classList.add('open');
                 
             } catch(e) {
-                console.error("Drive fetch error", e);
                 driveHideLoading();
             }
         }
@@ -682,6 +665,7 @@
                 poolDailyData: remote.poolDailyData || {},
                 poolHourlyData: remote.poolHourlyData || {}
             };
+            localStorage.setItem('appData_cache', JSON.stringify(appData));
             updateUIFromMemory();
             afficherGraphiqueHoraire();
             chargerDonneesJournalieres();
@@ -702,7 +686,7 @@
             localStorage.setItem(DRIVE_LS+'last_sync_iso', iso);
             localStorage.setItem(DRIVE_LS+'last_sync', new Date(iso).toLocaleString('fr-FR'));
             applyRemoteData(remote);
-            driveToast('✅ Données mises à jour depuis Google Drive');
+            driveToast('✅ Données synchronisées');
         }
         
         async function driveCheckOnConnect(){
@@ -711,9 +695,6 @@
             await driveFetchAndCompare();
             driveStartPolling();
             updateDriveStatusUI();
-            
-            afficherGraphiqueHoraire();
-            chargerDonneesJournalieres();
         }
         
         function driveStartPolling() {
@@ -733,42 +714,14 @@
                 btnEl.textContent = '🔓 Déconnecter';
                 btnEl.style.background = '#e74c3c';
             } else {
-                statusEl.textContent = 'Non connecté';
+                statusEl.textContent = 'Non connecté (Mode Local)';
                 statusEl.style.color = '#bdc3c7';
                 btnEl.textContent = '🔑 Se connecter';
                 btnEl.style.background = '#3498db';
             }
         }
-        
-        function migrateLocalStorageToDriveMemory() {
-            if(Object.keys(appData.poolDailyData).length === 0) {
-                const fb = localStorage.getItem('localFallbackData');
-                if (fb) {
-                    appData = JSON.parse(fb);
-                    return;
-                }
-                
-                const savedDate = localStorage.getItem('startDate');
-                const savedCP = localStorage.getItem('userPostalCode');
-                const pDaily = localStorage.getItem('poolDailyData') || localStorage.getItem('poolData');
-                const pHourly = localStorage.getItem('poolHourlyData');
-                
-                if (savedDate || savedCP || pDaily || pHourly) {
-                    appData.startDate = savedDate || '2024-01-01';
-                    appData.userPostalCode = savedCP || '';
-                    if(pDaily) appData.poolDailyData = JSON.parse(pDaily);
-                    if(pHourly) appData.poolHourlyData = JSON.parse(pHourly);
-                    
-                    localStorage.removeItem('startDate');
-                    localStorage.removeItem('userPostalCode');
-                    localStorage.removeItem('poolData');
-                    localStorage.removeItem('poolDailyData');
-                    localStorage.removeItem('poolHourlyData');
-                }
-            }
-        }
 
-        /* ---------------- MAIN APP LOGIC ---------------- */
+        /* ---------------- INTERFACE GRAPH_CONTRÔLE ---------------- */
         
         function toggleMenu() {
             const sidebar = document.getElementById('sidebar');
@@ -785,10 +738,10 @@
         }
 
         function resetSettings() {
-            if(confirm("Êtes-vous sûr de vouloir tout effacer (Date, Code Postal, Données Piscine) ? Ces données seront aussi effacées sur le Cloud.")) {
+            if(confirm("Effacer tout le cache local et Cloud ?")) {
                 appData = {startDate: '2024-01-01', userPostalCode: '', poolDailyData: {}, poolHourlyData: {}};
+                localStorage.removeItem('appData_cache');
                 forceDataSave();
-                localStorage.removeItem('localFallbackData');
                 afficherGraphiqueHoraire();
                 chargerDonneesJournalieres();
             }
@@ -798,17 +751,8 @@
             document.getElementById('startDate').value = appData.startDate;
             document.getElementById('cp').value = appData.userPostalCode;
             
-            if(Object.keys(appData.poolDailyData).length > 0) {
-                document.getElementById('importStatusDaily').style.display = 'block';
-            } else {
-                document.getElementById('importStatusDaily').style.display = 'none';
-            }
-            
-            if(Object.keys(appData.poolHourlyData).length > 0) {
-                document.getElementById('importStatusHourly').style.display = 'block';
-            } else {
-                document.getElementById('importStatusHourly').style.display = 'none';
-            }
+            document.getElementById('importStatusDaily').style.display = Object.keys(appData.poolDailyData).length > 0 ? 'block' : 'none';
+            document.getElementById('importStatusHourly').style.display = Object.keys(appData.poolHourlyData).length > 0 ? 'block' : 'none';
         }
         
         function generateDateRange(startStr, endStr) {
@@ -826,6 +770,11 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            // Affichage graphique immédiat basé sur le cache au boot
+            updateUIFromMemory();
+            afficherGraphiqueHoraire();
+            chargerDonneesJournalieres();
+
             document.getElementById('startDate').addEventListener('change', (e) => {
                 appData.startDate = e.target.value;
                 forceDataSave();
@@ -843,21 +792,14 @@
             setupDND('dailySection', 'daily');
             setupDND('hourlySection', 'hourly');
             
-            // Initialization Trigger
+            // Lancement asynchrone des APIs Cloud
             driveInit();
         });
 
-        // DRAG AND DROP SETUP
         function setupDND(zoneId, type) {
             const dropZone = document.getElementById(zoneId);
-            dropZone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropZone.classList.add('dragover');
-            });
-            dropZone.addEventListener('dragleave', (e) => {
-                e.preventDefault();
-                dropZone.classList.remove('dragover');
-            });
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+            dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); });
             dropZone.addEventListener('drop', (e) => {
                 e.preventDefault();
                 dropZone.classList.remove('dragover');
@@ -868,15 +810,12 @@
         }
 
         function handleFileEvent(e, type) {
-            if (e.target.files.length > 0) {
-                processFile(e.target.files[0], type);
-            }
+            if (e.target.files.length > 0) processFile(e.target.files[0], type);
             e.target.value = ''; 
         }
 
         function processFile(file, type) {
             if (!file) return;
-
             const fileName = file.name.toLowerCase();
             const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
             const reader = new FileReader();
@@ -886,22 +825,14 @@
                     try {
                         const data = new Uint8Array(evt.target.result);
                         const workbook = XLSX.read(data, {type: 'array'});
-                        const firstSheetName = workbook.SheetNames[0];
-                        const worksheet = workbook.Sheets[firstSheetName];
-                        const csvText = XLSX.utils.sheet_to_csv(worksheet);
-                        
-                        if (type === 'daily') traiterDonneesJournalieres(csvText);
-                        else traiterDonneesHoraires(csvText);
-                    } catch(err) {
-                        alert("Erreur lors de la lecture du fichier Excel.");
-                        console.error(err);
-                    }
+                        const csvText = XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]);
+                        type === 'daily' ? traiterDonneesJournalieres(csvText) : traiterDonneesHoraires(csvText);
+                    } catch(err) { alert("Erreur lors de la lecture du fichier Excel."); }
                 };
                 reader.readAsArrayBuffer(file);
             } else {
                 reader.onload = function(evt) {
-                    if (type === 'daily') traiterDonneesJournalieres(evt.target.result);
-                    else traiterDonneesHoraires(evt.target.result);
+                    type === 'daily' ? traiterDonneesJournalieres(evt.target.result) : traiterDonneesHoraires(evt.target.result);
                 };
                 reader.readAsText(file);
             }
@@ -924,11 +855,9 @@
                 if (parts.length >= 2) {
                     const rawDate = parts[0].trim();
                     const rawTemp = parts[1].trim();
-
                     if (rawDate.length === 8 && !isNaN(rawDate)) {
                         const formattedDate = `${rawDate.substring(0,4)}-${rawDate.substring(4,6)}-${rawDate.substring(6,8)}`;
-                        const tempValue = (rawTemp === '#' || rawTemp === '') ? null : parseFloat(rawTemp);
-                        newPoolData[formattedDate] = tempValue;
+                        newPoolData[formattedDate] = (rawTemp === '#' || rawTemp === '') ? null : parseFloat(rawTemp);
                         validLinesCount++;
                     }
                 }
@@ -937,11 +866,9 @@
             if (validLinesCount > 0) {
                 appData.poolDailyData = newPoolData;
                 forceDataSave();
-                alert("Données journalières écrasées et importées ! (" + validLinesCount + " jours)");
+                alert("Données journalières importées ! (" + validLinesCount + " jours)");
                 chargerDonneesJournalieres();
-            } else {
-                alert("Erreur : Format non reconnu pour les données journalières.");
-            }
+            } else { alert("Erreur : Format journalier non valide."); }
         }
         
         function traiterDonneesHoraires(text) {
@@ -954,11 +881,9 @@
                 if (parts.length < 2) parts = line.split(';');
                 
                 if (parts.length >= 2) {
-                    let rawDate = parts[0].trim();
+                    let rawDate = parts[0].trim().replace(/\//g, '-');
                     const rawTemp = parts[1].trim();
 
-                    rawDate = rawDate.replace(/\//g, '-');
-                    
                     if (rawDate.length >= 10 && rawDate.includes(':')) {
                         const tempValue = (rawTemp === '#' || rawTemp === '') ? null : parseFloat(rawTemp);
                         if (tempValue !== null && !isNaN(tempValue)) {
@@ -973,9 +898,7 @@
                 forceDataSave();
                 alert("Données horaires ajoutées ! (" + validLinesCount + " relevés)");
                 afficherGraphiqueHoraire();
-            } else {
-                alert("Erreur : Format horaire non reconnu.");
-            }
+            } else { alert("Erreur : Format horaire non valide."); }
         }
 
         async function chargerDonneesJournalieres() {
@@ -997,41 +920,24 @@
                 try {
                     const geoResponse = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${cp}&postcode=${cp}&limit=1`);
                     const geoData = await geoResponse.json();
+                    if (geoData.features && geoData.features.length > 0) {
+                        const coordinates = geoData.features[0].geometry.coordinates;
+                        ville = geoData.features[0].properties.city;
 
-                    if (!geoData.features || geoData.features.length === 0) {
-                        throw new Error("Code postal introuvable.");
-                    }
+                        const endDateObj = new Date();
+                        endDateObj.setDate(endDateObj.getDate() - 5);
+                        const endDate = endDateObj.toISOString().split('T')[0];
 
-                    const coordinates = geoData.features[0].geometry.coordinates;
-                    const lon = coordinates[0];
-                    const lat = coordinates[1];
-                    ville = geoData.features[0].properties.city;
+                        const meteoUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${coordinates[1]}&longitude=${coordinates[0]}&start_date=${startDate}&end_date=${endDate}&daily=temperature_2m_mean&timezone=Europe%2FParis`;
+                        const meteoResponse = await fetch(meteoUrl);
+                        const meteoData = await meteoResponse.json();
 
-                    const endDateObj = new Date();
-                    endDateObj.setDate(endDateObj.getDate() - 5);
-                    const endDate = endDateObj.toISOString().split('T')[0];
-
-                    const meteoUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&daily=temperature_2m_mean&timezone=Europe%2FParis`;
-                    
-                    const meteoResponse = await fetch(meteoUrl);
-                    const meteoData = await meteoResponse.json();
-
-                    if (meteoData.daily) {
-                        meteoData.daily.time.forEach((d, i) => {
-                            airTempsMap[d] = meteoData.daily.temperature_2m_mean[i];
-                        });
+                        if (meteoData.daily) {
+                            meteoData.daily.time.forEach((d, i) => { airTempsMap[d] = meteoData.daily.temperature_2m_mean[i]; });
+                        }
                     }
                 } catch (error) {
-                    console.error("Erreur météo:", error);
-                    if(errorMsg) {
-                        errorMsg.textContent = error.message || "Erreur réseau météo.";
-                        errorMsg.style.display = 'block';
-                    }
-                }
-            } else if (cp) {
-                if(errorMsg) {
-                    errorMsg.textContent = 'Veuillez renseigner un code postal valide à 5 chiffres.';
-                    errorMsg.style.display = 'block';
+                    if(errorMsg) { errorMsg.textContent = "Erreur de chargement API Météo."; errorMsg.style.display = 'block'; }
                 }
             }
 
@@ -1052,8 +958,7 @@
                 data: {
                     labels: dates.map(d => {
                         const arr = d.split('-');
-                        const dateObj = new Date(arr[0], arr[1]-1, arr[2]);
-                        return dateObj.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short', year: 'numeric'});
+                        return new Date(arr[0], arr[1]-1, arr[2]).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short', year: 'numeric'});
                     }),
                     datasets: [
                         {
@@ -1061,53 +966,22 @@
                             data: airTemperatures,
                             borderColor: 'rgba(230, 126, 34, 0.4)',
                             backgroundColor: 'rgba(230, 126, 34, 0.05)',
-                            borderWidth: 1.5,
-                            pointRadius: 0, 
-                            pointHoverRadius: 4,
-                            fill: true,
-                            tension: 0.1,
-                            spanGaps: true
+                            borderWidth: 1.5, pointRadius: 0, fill: true, tension: 0.1, spanGaps: true
                         },
                         {
                             label: `Temp. Eau Journalière (°C)`,
                             data: poolTemperatures,
-                            borderColor: '#3498db',
-                            backgroundColor: 'transparent',
-                            borderWidth: 2,
-                            pointRadius: 0, 
-                            pointHoverRadius: 6,
-                            fill: false,
-                            tension: 0.1,
-                            spanGaps: true 
+                            borderColor: '#3498db', backgroundColor: 'transparent',
+                            borderWidth: 2, pointRadius: 0, pointHoverRadius: 6, fill: false, tension: 0.1, spanGaps: true 
                         }
                     ]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
+                    responsive: true, maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        tooltip: {
-                            backgroundColor: 'rgba(44, 62, 80, 0.9)',
-                            callbacks: {
-                                label: function(context) {
-                                    if (context.parsed.y !== null) {
-                                        return `${context.dataset.label} : ${context.parsed.y} °C`;
-                                    }
-                                    return null;
-                                }
-                            }
-                        }
-                    },
+                    plugins: { tooltip: { backgroundColor: 'rgba(44, 62, 80, 0.9)' } },
                     scales: {
-                        x: { 
-                            grid: { display: false }, 
-                            ticks: { 
-                                maxTicksLimit: 20,
-                                minRotation: 90, 
-                                maxRotation: 90 
-                            } 
-                        },
+                        x: { grid: { display: false }, ticks: { maxTicksLimit: 20, minRotation: 90, maxRotation: 90 } },
                         y: { title: { display: true, text: 'Température (°C)' }, grid: { color: '#eef2f3' } }
                     }
                 }
@@ -1118,38 +992,24 @@
             const poolHourlyObj = appData.poolHourlyData;
             const sortedKeys = Object.keys(poolHourlyObj).sort(); 
             const ctx = document.getElementById('hourlyChart').getContext('2d');
-            
             if (hourlyChartInstance) hourlyChartInstance.destroy();
             
             if (sortedKeys.length === 0) {
                 hourlyChartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: { labels: [], datasets: [] },
+                    type: 'line', data: { labels: [], datasets: [] },
                     options: {
                         responsive: true, maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            title: {
-                                display: true,
-                                text: 'Aucune donnée horaire importée (Déposez un fichier ici)',
-                                color: '#7f8c8d', font: { size: 14, weight: 'normal' }
-                            }
-                        },
+                        plugins: { title: { display: true, text: 'Déposez votre historique horaire (.csv, .xlsx) ici pour l\'afficher', color: '#7f8c8d' } },
                         scales: { x: { display: false }, y: { display: false } }
                     }
                 });
                 return;
             }
             
-            const dates = [];
-            const temperatures = [];
-            
+            const dates = []; const temperatures = [];
             sortedKeys.forEach(k => {
                 const dateObj = new Date(k.replace(' ', 'T') + ':00');
-                const formattedLabel = dateObj.toLocaleString('fr-FR', {
-                    day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit'
-                });
-                dates.push(formattedLabel);
+                dates.push(dateObj.toLocaleString('fr-FR', {day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit'}));
                 temperatures.push(poolHourlyObj[k]);
             });
 
@@ -1157,47 +1017,18 @@
                 type: 'line',
                 data: {
                     labels: dates,
-                    datasets: [
-                        {
-                            label: `Temp. piscine`,
-                            data: temperatures,
-                            borderColor: '#8e44ad', 
-                            backgroundColor: 'rgba(142, 68, 173, 0.1)',
-                            borderWidth: 1.5,
-                            pointRadius: 0, 
-                            pointHoverRadius: 6,
-                            fill: true,
-                            tension: 0.1,
-                            spanGaps: true 
-                        }
-                    ]
+                    datasets: [{
+                        label: `Temp. piscine`, data: temperatures,
+                        borderColor: '#8e44ad', backgroundColor: 'rgba(142, 68, 173, 0.1)',
+                        borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 6, fill: true, tension: 0.1, spanGaps: true 
+                    }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
+                    responsive: true, maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        tooltip: {
-                            backgroundColor: 'rgba(44, 62, 80, 0.9)',
-                            callbacks: {
-                                label: function(context) {
-                                    if (context.parsed.y !== null) {
-                                        return `Temp. piscine : ${context.parsed.y} °C`;
-                                    }
-                                    return null;
-                                }
-                            }
-                        }
-                    },
+                    plugins: { tooltip: { backgroundColor: 'rgba(44, 62, 80, 0.9)' } },
                     scales: {
-                        x: { 
-                            grid: { display: false }, 
-                            ticks: { 
-                                maxTicksLimit: 30,
-                                minRotation: 90, 
-                                maxRotation: 90 
-                            } 
-                        },
+                        x: { grid: { display: false }, ticks: { maxTicksLimit: 30, minRotation: 90, maxRotation: 90 } },
                         y: { title: { display: true, text: 'Température (°C)' }, grid: { color: '#eef2f3' } }
                     }
                 }
