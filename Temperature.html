@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Historique des Températures (v0.2.1)</title>
+    <title>Historique des Températures (v0.2.2)</title>
     
     <!-- Bibliothèques JS -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -264,7 +264,7 @@
         .chart-section.dragover .dropzone-hint { display: block; }
         
         .chart-title { font-size: 18px; color: #34495e; margin-bottom: 15px; font-weight: 600; }
-        .chart-container { position: relative; height: 400px; width: 100%; }
+        .chart-container { position: relative; height: 450px; width: 100%; }
 
         .source-info { 
             font-size: 12px; color: #7f8c8d; text-align: right; margin-top: 30px; 
@@ -406,7 +406,7 @@
 
     <script>
         // CORE APP SETTINGS
-        const APP_VERSION = 'v0.2.1';
+        const APP_VERSION = 'v0.2.2';
         document.getElementById('versionDisplay').textContent = APP_VERSION;
         
         // GLOBALS
@@ -444,7 +444,6 @@
             _driveToastTimer = setTimeout(()=>{driveToastEl.style.opacity='0';}, duration);
         }
         
-        // Dynamic robust script loading for GitHub Pages
         function loadScript(src) {
             return new Promise((resolve, reject) => {
                 const s = document.createElement('script');
@@ -483,7 +482,6 @@
             
             const apisReady = await loadGoogleAPIs();
             if (!apisReady) {
-                // Initialisation mode local si API bloquées
                 updateUIFromMemory();
                 afficherGraphiqueHoraire();
                 chargerDonneesJournalieres();
@@ -525,7 +523,7 @@
                 updateUIFromMemory();
                 afficherGraphiqueHoraire();
                 chargerDonneesJournalieres();
-                updateDriveStatusUI(); // Will show "Non connecté"
+                updateDriveStatusUI(); 
             }
         }
         
@@ -624,7 +622,6 @@
             if(googleApisLoaded && driveAccessToken) {
                 driveSave();
             } else {
-                // Repli : Sauvegarde locale si Drive non disponible
                 localStorage.setItem('localFallbackData', JSON.stringify(appData));
             }
             updateUIFromMemory();
@@ -744,7 +741,6 @@
         }
         
         function migrateLocalStorageToDriveMemory() {
-            // Restore legacy local config if drive is empty
             if(Object.keys(appData.poolDailyData).length === 0) {
                 const fb = localStorage.getItem('localFallbackData');
                 if (fb) {
@@ -912,7 +908,6 @@
         }
 
         function cleanCSVLines(text) {
-            // Bypass regex \r \n issues by using simple string manipulations
             return text.split('\n').map(l => l.replace('\r', '').trim()).filter(l => l !== '');
         }
 
@@ -1105,7 +1100,14 @@
                         }
                     },
                     scales: {
-                        x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { 
+                                maxTicksLimit: 20,
+                                minRotation: 90, 
+                                maxRotation: 90 
+                            } 
+                        },
                         y: { title: { display: true, text: 'Température (°C)' }, grid: { color: '#eef2f3' } }
                     }
                 }
@@ -1188,7 +1190,14 @@
                         }
                     },
                     scales: {
-                        x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { 
+                                maxTicksLimit: 30,
+                                minRotation: 90, 
+                                maxRotation: 90 
+                            } 
+                        },
                         y: { title: { display: true, text: 'Température (°C)' }, grid: { color: '#eef2f3' } }
                     }
                 }
