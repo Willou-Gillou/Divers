@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Centraliseur Apps v2.0.0</title>
+  <title>Centraliseur Apps v2.0.1</title>
   <style>
     :root{
       --bg1:#0b1126;--bg2:#16203c;--glass:rgba(22,30,58,.65);--line:rgba(255,255,255,.08);--text:#f5f8ff;--muted:#aab7d7;
@@ -114,7 +114,7 @@
         <div class="status glass"><span id="statusDot" class="dot orange"></span><div id="statusText" class="status-text">En attente.</div></div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           <div class="header-badge" id="driveBadge" style="cursor:pointer;user-select:none" onclick="handleDriveBadgeClick()" title="Google Drive — cliquer pour déconnecter">☁ Drive</div>
-          <div class="header-badge"><span id="appVersionLabel">v2.0.0</span></div>
+          <div class="header-badge"><span id="appVersionLabel">v2.0.1</span></div>
         </div>
       </div>
     </div>
@@ -180,7 +180,6 @@
   </div>
   <div id="copyToast" class="toast-copy">URL copiée</div>
 
-  <!-- ── GOOGLE DRIVE OVERLAYS ── -->
   <div class="drive-overlay" id="driveLoginOverlay">
     <div class="drive-card">
       <div style="text-align:center;font-size:2rem">🔧</div>
@@ -206,7 +205,7 @@
   </div>
 
   <script>
-    const APP_VERSION = 'v2.0.0';
+    const APP_VERSION = 'v2.0.1';
     const PROFILE_STORAGE_KEY = 'centraliseur-apps-profiles';
     const DATA_STORAGE_KEY = 'centraliseur-apps-data';
     const UI_STORAGE_KEY = 'centraliseur-apps-ui';
@@ -248,12 +247,24 @@
       fitWrap: document.getElementById('fitWrap'),
     };
 
-    // ── APP-SPECIFIC DRIVE CONSTANTS ──
+    // ── APP-SPECIFIC DRIVE CONSTANTS & COOKIES ──
     const DRIVE_FILE_NAME = 'centraliseur_apps.json';
     const DRIVE_CLIENT_ID = '68487410553-mp697niljk1ov3sn2ucjfe8ckkqds48p.apps.googleusercontent.com';
     const DRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.appdata';
     const DRIVE_LS        = 'ca.drive.'; // app-specific prefix
     const DRIVE_CACHE_KEY = 'ca.drive.cache';
+
+    function _setCookie(name, value) {
+        document.cookie = name + "=" + encodeURIComponent(value) + "; path=/; max-age=31536000; SameSite=None; Secure";
+    }
+    function _getCookie(name) {
+        const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        if (match) return decodeURIComponent(match[2]);
+        return null;
+    }
+    function _deleteCookie(name) {
+        document.cookie = name + "=; path=/; max-age=-1; SameSite=None; Secure";
+    }
 
     let driveTokenClient  = null;
     let driveAccessToken  = null;
@@ -278,20 +289,52 @@
 
     async function driveInit() {
       await driveLoadLibs();
-      const hint = sessionStorage.getItem(DRIVE_LS+'hint') || localStorage.getItem(DRIVE_LS+'hint') || '';
-      const wasConnected = localStorage.getItem(DRIVE_LS+'connected') === '1';
+      
+      const hint = _getCookie(DRIVE_LS+'hint') || sessionStorage.getItem(DRIVE_LS+'hint') || localStorage.getItem(DRIVE_LS+'hint') || '';
+      const wasConnected = (_getCookie(DRIVE_LS+'connected') === '1') || (localStorage.getItem(DRIVE_LS+'connected') === '1');
+
+      const cachedToken = _getCookie(DRIVE_LS+'token') || localStorage.getItem(DRIVE_LS+'token');
+      const cachedExp = _getCookie(DRIVE_LS+'token_exp') || localStorage.getItem(DRIVE_LS+'token_exp');
+
+      if (wasConnected && cachedToken && cachedExp && Date.now() < parseInt(cachedExp, 10)) {
+          driveAccessToken = cachedToken;
+          gapi.client.setToken({access_token: driveAccessToken});
+          _driveInitResolve();
+          driveHideLoading(); driveShowLogin(false);
+          updateDriveBadge();
+          setStatus('green', 'Google Drive connecté.');
+          await driveFetchAndCompare();
+          driveStartPolling();
+          return; 
+      }
+
       driveTokenClient = google.accounts.oauth2.initTokenClient({
         client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPE, login_hint: hint,
         callback: async (resp) => {
           if (resp.error) { driveHideLoading(); driveShowLogin(true); return; }
           driveAccessToken = resp.access_token;
           gapi.client.setToken({ access_token: driveAccessToken });
+          
+          const exp = Date.now() + ((resp.expires_in || 3599) * 1000) - 60000;
+          localStorage.setItem(DRIVE_LS+'token', driveAccessToken);
+          localStorage.setItem(DRIVE_LS+'token_exp', exp.toString());
+          _setCookie(DRIVE_LS+'token', driveAccessToken);
+          _setCookie(DRIVE_LS+'token_exp', exp.toString());
+
           try {
             const ui = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + driveAccessToken } });
             const ud = await ui.json();
-            if (ud.email) { localStorage.setItem(DRIVE_LS+'hint', ud.email); sessionStorage.setItem(DRIVE_LS+'hint', ud.email); }
+            if (ud.email) { 
+                localStorage.setItem(DRIVE_LS+'hint', ud.email); 
+                sessionStorage.setItem(DRIVE_LS+'hint', ud.email); 
+                _setCookie(DRIVE_LS+'hint', ud.email);
+            }
           } catch(e) {}
-          localStorage.setItem(DRIVE_LS+'connected', '1'); sessionStorage.setItem(DRIVE_LS+'connected', '1');
+          
+          localStorage.setItem(DRIVE_LS+'connected', '1'); 
+          sessionStorage.setItem(DRIVE_LS+'connected', '1');
+          _setCookie(DRIVE_LS+'connected', '1');
+          
           driveHideLoading(); driveShowLogin(false);
           updateDriveBadge();
           setStatus('green', 'Google Drive connecté.');
@@ -300,7 +343,22 @@
         }
       });
       _driveInitResolve();
-      if (wasConnected && hint) { driveShowLoading(); driveTokenClient.requestAccessToken({ prompt: 'none' }); }
+      
+      if (wasConnected) { 
+          driveShowLoading(); 
+          setTimeout(()=>{
+            if(!driveAccessToken){
+                driveHideLoading();
+                driveShowLogin(true);
+            }
+          }, 5000);
+          try {
+              driveTokenClient.requestAccessToken({ prompt: 'none' }); 
+          } catch(e) {
+              driveHideLoading();
+              driveShowLogin(true);
+          }
+      }
       else { driveShowLogin(true); }
     }
 
@@ -1058,8 +1116,9 @@ function getAllRows(){ return [...state.githubApps, ...state.hfApps, ...state.ko
         if (!confirm('Déconnecter Google Drive ?')) return;
         google.accounts.oauth2.revoke(driveAccessToken);
         driveAccessToken = null; driveFileId = null;
-        ['connected','hint','file_id','last_sync','last_sync_iso'].forEach(k => {
+        ['connected','hint','file_id','last_sync','last_sync_iso','token','token_exp'].forEach(k => {
           localStorage.removeItem(DRIVE_LS+k); sessionStorage.removeItem(DRIVE_LS+k);
+          _deleteCookie(DRIVE_LS+k);
         });
         localStorage.removeItem(DRIVE_CACHE_KEY);
         driveStopPolling();
