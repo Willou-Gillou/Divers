@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rendez-vous à mi-chemin - v1.4.8</title>
+<title>Rendez-vous à mi-chemin - v1.4.9</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -178,7 +178,7 @@ header{display:flex;align-items:center;gap:14px;padding:14px 22px;background:var
 <header>
   <div class="logo-icon">🤝</div>
   <div class="logo-text">
-    <h1>Rendez-vous à mi-chemin <span class="version-tag">v1.4.8</span></h1>
+    <h1>Rendez-vous à mi-chemin <span class="version-tag">v1.4.9</span></h1>
     <p>Trouvez le point de rencontre idéal</p>
   </div>
 </header>
@@ -235,7 +235,7 @@ header{display:flex;align-items:center;gap:14px;padding:14px 22px;background:var
         <label class="toggle"><input type="checkbox" id="tog-iso" checked onchange="toggleLayer('iso')"><div class="toggle-track"></div></label>
       </div>
       <div class="toggle-row">
-        <span class="toggle-label"><span class="icon">📍</span> Barycentre </span>
+        <span class="toggle-label"><span class="icon">📍</span> Centre de la forme</span>
         <label class="toggle blue"><input type="checkbox" id="tog-equi" checked onchange="toggleLayer('equi')"><div class="toggle-track"></div></label>
       </div>
     </div>
@@ -646,7 +646,11 @@ async function findOptimalMeetingPoint(geoPoints) {
       let diff = maxT - minT;
       let sumT = times.reduce((a,b)=>a+b, 0);
       
-      let score = sumT + (diff * 2.5); 
+      // V1.4.9 FIX : Algorithme des moindres carrés (Barycentre temporel)
+      // Cela évite de se fixer sur des extrémités pour égaliser artificiellement les temps, 
+      // et retourne naturellement vers un centre de gravité du réseau routier.
+      let sumSq = times.reduce((a,b)=>a+(b*b), 0);
+      let score = sumSq; 
       
       if(score < bestScore) {
         bestScore = score;
@@ -812,7 +816,7 @@ async function calculate(){
     if(document.getElementById('tog-iso').checked) state.isoLayer.addTo(map);
     step('s4','done');
 
-    // ⑤ BARYCENTRE (Centre de la forme / Polygone v1.4.8)
+    // ⑤ BARYCENTRE
     const pts2D = geoPoints.map(p => map.project([p.lat, p.lon], 12));
     let baryLat, baryLon;
     let sortedPoints = [];
@@ -825,16 +829,13 @@ async function calculate(){
         baryLon = centerLL.lng;
         sortedPoints = geoPoints;
     } else {
-        // 1. Calcul du centre moyen pour trier les points autour
         const avgX = pts2D.reduce((sum, p) => sum + p.x, 0) / pts2D.length;
         const avgY = pts2D.reduce((sum, p) => sum + p.y, 0) / pts2D.length;
 
-        // 2. Tri circulaire pour former le polygone sans croisement
         pts2D.forEach((pt, i) => { pt.originalIndex = i; });
         pts2D.sort((a, b) => Math.atan2(a.y - avgY, a.x - avgX) - Math.atan2(b.y - avgY, b.x - avgX));
         sortedPoints = pts2D.map(pt => geoPoints[pt.originalIndex]);
 
-        // 3. Calcul de l'aire et du centroïde géométrique (Formule de Shoelace)
         let signedArea = 0;
         let Cx = 0;
         let Cy = 0;
@@ -864,7 +865,6 @@ async function calculate(){
 
     const equiElements = [];
 
-    // Tracé de la forme pour la visualisation
     if (sortedPoints.length >= 3) {
       const polyCoords = sortedPoints.map(p => [p.lat, p.lon]);
       equiElements.push(L.polygon(polyCoords, {color: '#7ab8e8', weight: 1.5, opacity: 0.4, dashArray: '4 4', fill: true, fillColor: '#7ab8e8', fillOpacity: 0.05, interactive: false}));
@@ -926,7 +926,7 @@ async function calculate(){
     
     let infoTxt = `Temps estimé moyen : ${fmtHHMM(exactTimes.reduce((a,b)=>a+b,0)/geoPoints.length)}`;
     if(geoPoints.length > 2) {
-        infoTxt += `<br><span style="color:var(--green)">Somme totale optimisée : ${fmtHHMM(totalSum)}</span>`;
+        infoTxt += `<br><span style="color:var(--green)">Équilibre global (Barycentre temporel) : ${fmtHHMM(totalSum)} au total</span>`;
     }
     document.getElementById('rv-sub').innerHTML = infoTxt;
     
