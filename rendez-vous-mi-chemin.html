@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rendez-vous à mi-chemin - v46</title>
+<title>Rendez-vous à mi-chemin - v1.4.8</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -23,8 +23,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
 /* HEADER */
 header{display:flex;align-items:center;gap:14px;padding:14px 22px;background:var(--surface);border-bottom:1px solid var(--border);z-index:1000;flex-shrink:0;}
 .logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent3));border-radius:10px;display:grid;place-items:center;font-size:18px;}
-.logo-text h1{font-family:'Playfair Display',serif;font-size:17px;font-weight:600;letter-spacing:-0.3px;line-height:1;}
-.logo-text p{font-size:11px;color:var(--text-muted);margin-top:2px;letter-spacing:0.5px;text-transform:uppercase;}
+.logo-text h1{font-family:'Playfair Display',serif;font-size:17px;font-weight:600;letter-spacing:-0.3px;line-height:1;display:flex;align-items:center;gap:8px;}
+.logo-text p{font-size:11px;color:var(--text-muted);margin-top:4px;letter-spacing:0.5px;text-transform:uppercase;}
+.version-tag {font-size:11px;background:rgba(255,255,255,0.08);padding:2px 6px;border-radius:4px;color:var(--accent);font-weight:normal;font-family:'DM Sans',sans-serif;}
 
 /* LAYOUT */
 .app-body{flex:1;display:flex;overflow:hidden;}
@@ -177,7 +178,7 @@ header{display:flex;align-items:center;gap:14px;padding:14px 22px;background:var
 <header>
   <div class="logo-icon">🤝</div>
   <div class="logo-text">
-    <h1>Rendez-vous à mi-chemin</h1>
+    <h1>Rendez-vous à mi-chemin <span class="version-tag">v1.4.8</span></h1>
     <p>Trouvez le point de rencontre idéal</p>
   </div>
 </header>
@@ -234,8 +235,8 @@ header{display:flex;align-items:center;gap:14px;padding:14px 22px;background:var
         <label class="toggle"><input type="checkbox" id="tog-iso" checked onchange="toggleLayer('iso')"><div class="toggle-track"></div></label>
       </div>
       <div class="toggle-row">
-        <span class="toggle-label"><span class="icon">📍</span> Barycentre géographique</span>
-        <label class="toggle blue"><input type="checkbox" id="tog-equi" onchange="toggleLayer('equi')"><div class="toggle-track"></div></label>
+        <span class="toggle-label"><span class="icon">📍</span> Barycentre </span>
+        <label class="toggle blue"><input type="checkbox" id="tog-equi" checked onchange="toggleLayer('equi')"><div class="toggle-track"></div></label>
       </div>
     </div>
 
@@ -278,13 +279,27 @@ header{display:flex;align-items:center;gap:14px;padding:14px 22px;background:var
 // ═══════════════════════════════════════════════════════════════════════════════
 const COLORS = ['#e8c97a', '#7ab8e8', '#e87a9a', '#52c97a', '#9b7ae8', '#e67e22'];
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
-const MAX_ADDRESSES = 6; // Limitation pour ne pas dépasser la limite de 100 coords d'OSRM public
+const MAX_ADDRESSES = 6; 
+const FETCH_TIMEOUT_MS = 6000; 
 
 const map = L.map('map',{center:[46.5,2.3],zoom:6});
 const state = { sourceMarkers:[], isoLayer:null, equiLayer:null, midMarker:null, routeLayer:null, lastBounds:null, zoneBounds:null };
 
 let addressCount = 0;
 let typingTimers = {};
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ADDRESS INPUTS MANAGEMENT
@@ -321,12 +336,23 @@ function addAddressField() {
     showErr(`Maximum de ${MAX_ADDRESSES} adresses atteint.`);
     return;
   }
+  
+  const currentValues = [];
+  for(let i=0; i<addressCount; i++) {
+    const inp = document.getElementById(`addr-${i}`);
+    currentValues.push(inp ? inp.value : '');
+  }
+  
   addressCount++;
-  renderAddresses();
+  renderAddresses(); 
+  
+  for(let i=0; i<currentValues.length; i++) {
+    const inp = document.getElementById(`addr-${i}`);
+    if(inp) inp.value = currentValues[i];
+  }
 }
 
 function removeAddressField(index) {
-  // Transfer values up
   const inputs = [];
   for(let i=0; i<addressCount; i++) {
     inputs.push(document.getElementById(`addr-${i}`).value);
@@ -348,7 +374,6 @@ function clearInput(index){ document.getElementById(`addr-${index}`).value=''; }
 // ═══════════════════════════════════════════════════════════════════════════════
 function saveHistory(addrs) {
   let hist = JSON.parse(localStorage.getItem('rv_history_multi') || '[]');
-  // Avoid duplicates
   const sig = addrs.join('|');
   hist = hist.filter(h => h.join('|') !== sig);
   hist.unshift(addrs);
@@ -467,7 +492,7 @@ async function handleInput(e, idx) {
 
   typingTimers[idx] = setTimeout(async () => {
     try {
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&limit=5`, {headers:{'Accept-Language':'fr'}});
+      const r = await fetchWithTimeout(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&limit=5`, {headers:{'Accept-Language':'fr'}});
       const d = await r.json();
       if(d.length > 0) {
         list.innerHTML = '';
@@ -491,41 +516,47 @@ async function handleInput(e, idx) {
 // API OSRM & GEOCODING
 // ═══════════════════════════════════════════════════════════════════════════════
 async function geocode(addr){
-  const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`,{headers:{'Accept-Language':'fr'}});
+  const r=await fetchWithTimeout(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`,{headers:{'Accept-Language':'fr'}});
   const d=await r.json();
-  if(!d.length)throw new Error(`Adresse introuvable : "${addr}"`);
+  if(!d.length)throw new Error("Adresse introuvable : " + addr);
   return{lat:+d[0].lat,lon:+d[0].lon,display:d[0].display_name};
 }
 async function revGeocode(lat,lon){
   try{
-    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,{headers:{'Accept-Language':'fr'}});
+    const r=await fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,{headers:{'Accept-Language':'fr'}});
     const d=await r.json();
     const a=d.address||{};
-    return a.city||a.town||a.village||a.suburb||a.hamlet||a.county||'Point médian';
-  }catch{return'Point médian';}
+    return a.city||a.town||a.village||a.suburb||a.hamlet||a.county||"Point médian";
+  }catch{return "Point médian";}
 }
 
 async function getRoute(lonA,latA,lonB,latB){
-  const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${lonA},${latA};${lonB},${latB}?overview=full&geometries=geojson&annotations=duration`);
+  const r=await fetchWithTimeout(`https://router.project-osrm.org/route/v1/driving/${lonA},${latA};${lonB},${latB}?overview=full&geometries=geojson&annotations=duration`);
   const d=await r.json();
-  if(d.code!=='Ok')throw new Error('Impossible de calculer l\'itinéraire');
-  return{ duration:d.routes[0].duration, distance:d.routes[0].distance, coords:d.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]) };
+  if(d.code!=='Ok')throw new Error("Impossible de calculer l'itinéraire");
+  const route = d.routes[0];
+  const leg = route.legs[0];
+  return { 
+    duration: route.duration, 
+    distance: route.distance, 
+    coords: route.geometry.coordinates.map(c=>[c[1],c[0]]),
+    durations: leg && leg.annotation ? leg.annotation.duration : []
+  };
 }
 
-// Batch query pour Table (plusieurs sources vers plusieurs destinations)
 async function getTableDurations(sources, destinations){
   const coords = [...sources, ...destinations].map(p => `${p.lon},${p.lat}`).join(';');
   const srcIdx = sources.map((_, i) => i).join(';');
   const dstIdx = destinations.map((_, i) => i + sources.length).join(';');
   
-  const r = await fetch(`https://router.project-osrm.org/table/v1/driving/${coords}?sources=${srcIdx}&destinations=${dstIdx}&annotations=duration`);
+  const r = await fetchWithTimeout(`https://router.project-osrm.org/table/v1/driving/${coords}?sources=${srcIdx}&destinations=${dstIdx}&annotations=duration`);
   const d = await r.json();
-  if(d.code!=='Ok')throw new Error('Erreur de routage lors de l\'analyse');
-  return d.durations; // matrix [sources][destinations]
+  if(d.code!=='Ok')throw new Error("Erreur de routage lors de l'analyse");
+  return d.durations; 
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GEOMETRY HELPERS
+// GEOMETRY HELPERS & EXACT 2-POINT SOLVER (Interpolation Route)
 // ═══════════════════════════════════════════════════════════════════════════════
 function metricToLatLon(x, y, refLat, refLon) {
   const R = 6371000;
@@ -535,24 +566,56 @@ function metricToLatLon(x, y, refLat, refLon) {
   return {lat, lon};
 }
 
+async function findExactMidpointForTwo(A, B) {
+  const route = await getRoute(A.lon, A.lat, B.lon, B.lat);
+  const coords = route.coords;
+  const durations = route.durations;
+  const targetT = route.duration / 2;
+
+  let exactLat = coords[coords.length-1][0];
+  let exactLon = coords[coords.length-1][1];
+  let splitIdx = Math.floor(coords.length/2);
+
+  if (durations && durations.length === coords.length - 1) {
+    let acc = 0;
+    for (let i = 0; i < durations.length; i++) {
+      if (acc + durations[i] >= targetT) {
+        const excess = targetT - acc;
+        const ratio = durations[i] === 0 ? 0.5 : excess / durations[i];
+        
+        if (ratio < 0.5) {
+            exactLat = coords[i][0];
+            exactLon = coords[i][1];
+            splitIdx = i;
+        } else {
+            exactLat = coords[i+1][0];
+            exactLon = coords[i+1][1];
+            splitIdx = i+1;
+        }
+        break;
+      }
+      acc += durations[i];
+    }
+  }
+
+  return { lat: exactLat, lon: exactLon, tA: targetT, tB: targetT, maxT: targetT, minT: targetT, diff: 0, splitIdx: splitIdx, fullCoords: coords, totalDist: route.distance };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// MAIN OPTIMIZATION LOGIC FOR N POINTS
+// MAIN OPTIMIZATION LOGIC FOR N POINTS (Grid Search fallback)
 // ═══════════════════════════════════════════════════════════════════════════════
 async function findOptimalMeetingPoint(geoPoints) {
-  // 1. Définir la zone de recherche autour des points
   let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
   for (let p of geoPoints) {
     if(p.lat < minLat) minLat = p.lat; if(p.lat > maxLat) maxLat = p.lat;
     if(p.lon < minLon) minLon = p.lon; if(p.lon > maxLon) maxLon = p.lon;
   }
   
-  // Padding adaptatif (au moins 5% pour ne pas bloquer sur des points très proches)
   let latPad = Math.max((maxLat - minLat) * 0.3, 0.05);
   let lonPad = Math.max((maxLon - minLon) * 0.3, 0.05);
   minLat -= latPad; maxLat += latPad;
   minLon -= lonPad; maxLon += lonPad;
 
-  // Fonction interne de scan de grille
   async function scanGrid(minLt, maxLt, minLn, maxLn, gridSize) {
     let candidates = [];
     for(let i=0; i<gridSize; i++) {
@@ -581,24 +644,21 @@ async function findOptimalMeetingPoint(geoPoints) {
 
       let maxT = Math.max(...times), minT = Math.min(...times);
       let diff = maxT - minT;
-      let avgT = times.reduce((a,b)=>a+b, 0) / n;
+      let sumT = times.reduce((a,b)=>a+b, 0);
       
-      // Le score pénalise fortement la différence de temps, et légèrement le temps global pour éviter un point au milieu de nulle part
-      let score = diff + avgT * 0.3; 
+      let score = sumT + (diff * 2.5); 
       
       if(score < bestScore) {
         bestScore = score;
-        bestPt = { ...candidates[j], times, maxT, minT, diff };
+        bestPt = { ...candidates[j], times, maxT, minT, diff, sumT };
       }
     }
     return bestPt;
   }
 
-  // Passe 1 : Grille large 7x7 (49 points testés)
   let best1 = await scanGrid(minLat, maxLat, minLon, maxLon, 7);
   if(!best1) throw new Error("Aucun point de rencontre routier trouvé.");
   
-  // Passe 2 : Grille fine 5x5 autour du meilleur point
   let spanLat = (maxLat - minLat) / 5;
   let spanLon = (maxLon - minLon) / 5;
   let best2 = await scanGrid(best1.lat - spanLat, best1.lat + spanLat, best1.lon - spanLon, best1.lon + spanLon, 5);
@@ -610,6 +670,7 @@ async function findOptimalMeetingPoint(geoPoints) {
 // MAIN CALCULATE
 // ═══════════════════════════════════════════════════════════════════════════════
 async function calculate(){
+  if (document.getElementById('btn-calc').disabled) return;
   hideErr();
   const rawInputs = [];
   for(let i=0; i<addressCount; i++) {
@@ -617,7 +678,7 @@ async function calculate(){
     if(v) rawInputs.push(v);
   }
   
-  if(rawInputs.length < 2) { showErr('Veuillez saisir au moins 2 adresses valides.'); return; }
+  if(rawInputs.length < 2) { showErr("Veuillez saisir au moins 2 adresses valides."); return; }
 
   setLoading(true);
   clearLayers();
@@ -640,22 +701,45 @@ async function calculate(){
     map.fitBounds(bounds, {padding: [50, 50]});
     step('s1','done');
 
-    // ② POINT OPTIMAL MINIMAX
+    // ② POINT OPTIMAL MINIMAX / EXACT
     step('s2','active');
-    const optimalPt = await findOptimalMeetingPoint(geoPoints);
+    let optimalPt;
+    if (geoPoints.length === 2) {
+      optimalPt = await findExactMidpointForTwo(geoPoints[0], geoPoints[1]);
+    } else {
+      optimalPt = await findOptimalMeetingPoint(geoPoints);
+    }
     const T_base = optimalPt.maxT;
     step('s2','done');
 
     // ③ ITINÉRAIRES EXACTS
     step('s3','active');
-    const routes = await Promise.all(geoPoints.map(g => getRoute(g.lon, g.lat, optimalPt.lon, optimalPt.lat)));
+    let exactTimes = [];
+    let lines = [];
+    let routes = [];
     
-    // MAJ des temps exacts lissés
-    const exactTimes = routes.map(r => r.duration);
+    if (geoPoints.length === 2) {
+      exactTimes = [optimalPt.tA, optimalPt.tB];
+      
+      const coordsA = optimalPt.fullCoords.slice(0, optimalPt.splitIdx + 1);
+      const coordsB = optimalPt.fullCoords.slice(optimalPt.splitIdx).reverse(); 
+      
+      routes = [
+          { distance: optimalPt.totalDist / 2 },
+          { distance: optimalPt.totalDist / 2 }
+      ];
+
+      lines.push(L.polyline(coordsA, {color: COLORS[0], weight: 5, opacity: 0.85}));
+      lines.push(L.polyline(coordsB, {color: COLORS[1], weight: 5, opacity: 0.85}));
+    } else {
+      routes = await Promise.all(geoPoints.map(g => getRoute(g.lon, g.lat, optimalPt.lon, optimalPt.lat)));
+      exactTimes = routes.map(r => r.duration);
+      lines = routes.map((r, i) => L.polyline(r.coords, {color: COLORS[i%COLORS.length], weight: 5, opacity: 0.85}));
+    }
+    
     const maxExactT = Math.max(...exactTimes);
     const minExactT = Math.min(...exactTimes);
     
-    const lines = routes.map((r, i) => L.polyline(r.coords, {color: COLORS[i%COLORS.length], weight: 5, opacity: 0.85}));
     state.routeLayer = L.layerGroup(lines).addTo(map);
     step('s3','done');
 
@@ -674,10 +758,9 @@ async function calculate(){
     for(const delta of TARGET_DELTAS) {
       let targetT = T_base + delta;
       let loArr = [...prevAmps];
-      let hiArr = new Array(numPtsIso).fill((delta/60) * 1500); // heuristique 1.5km/min
+      let hiArr = new Array(numPtsIso).fill((delta/60) * 1500); 
       let bestPts = new Array(numPtsIso).fill(null);
 
-      // Binary search pour cette isochrone
       for(let iter = 0; iter < 8; iter++) {
         let testCoords = [];
         for(let i=0; i<numPtsIso; i++) {
@@ -688,7 +771,6 @@ async function calculate(){
           testCoords.push(llPt);
         }
 
-        // Requête OSRM batch pour les N points périphériques
         const batchDurs = await getTableDurations(geoPoints, testCoords);
         
         for(let j=0; j<numPtsIso; j++) {
@@ -713,33 +795,87 @@ async function calculate(){
       }
     }
 
-    // Dessin des zones
     const zoneConfig = { 600: '#166534', 1200: '#4ade80', 1800: '#f97316', 2400: '#ef4444' };
     const isoLayers = [];
-    zonePolys.reverse().forEach(zp => {
+    
+    const polysToRender = [...zonePolys].reverse();
+    polysToRender.forEach(zp => {
       const confColor = zoneConfig[zp.delta] || '#888';
       isoLayers.push(L.polygon(zp.pts, { color: confColor, weight: 2, opacity: 0.9, dashArray: '8 4', fillColor: confColor, fillOpacity: 0.15 }));
     });
     
-    // Point central marker
     const centerDot = L.circleMarker([optimalPt.lat, optimalPt.lon], {radius: 6, color: '#111', fillColor: '#fff', fillOpacity: 1, weight: 2})
-      .bindTooltip(`<b>Point d'équité temporel</b>`, {direction: 'top', offset: [0, -4]});
+      .bindTooltip("<b>Point de Rencontre Optimal</b>", {direction: 'top', offset: [0, -4]});
     isoLayers.push(centerDot);
     
     state.isoLayer = L.layerGroup(isoLayers);
     if(document.getElementById('tog-iso').checked) state.isoLayer.addTo(map);
     step('s4','done');
 
-    // ⑤ BARYCENTRE (ÉGAL-DISTANCE / VOL D'OISEAU)
-    const baryLat = geoPoints.reduce((sum, p) => sum + p.lat, 0) / geoPoints.length;
-    const baryLon = geoPoints.reduce((sum, p) => sum + p.lon, 0) / geoPoints.length;
-    
+    // ⑤ BARYCENTRE (Centre de la forme / Polygone v1.4.8)
+    const pts2D = geoPoints.map(p => map.project([p.lat, p.lon], 12));
+    let baryLat, baryLon;
+    let sortedPoints = [];
+
+    if (pts2D.length < 3) {
+        const cx = pts2D.reduce((sum, p) => sum + p.x, 0) / pts2D.length;
+        const cy = pts2D.reduce((sum, p) => sum + p.y, 0) / pts2D.length;
+        const centerLL = map.unproject([cx, cy], 12);
+        baryLat = centerLL.lat;
+        baryLon = centerLL.lng;
+        sortedPoints = geoPoints;
+    } else {
+        // 1. Calcul du centre moyen pour trier les points autour
+        const avgX = pts2D.reduce((sum, p) => sum + p.x, 0) / pts2D.length;
+        const avgY = pts2D.reduce((sum, p) => sum + p.y, 0) / pts2D.length;
+
+        // 2. Tri circulaire pour former le polygone sans croisement
+        pts2D.forEach((pt, i) => { pt.originalIndex = i; });
+        pts2D.sort((a, b) => Math.atan2(a.y - avgY, a.x - avgX) - Math.atan2(b.y - avgY, b.x - avgX));
+        sortedPoints = pts2D.map(pt => geoPoints[pt.originalIndex]);
+
+        // 3. Calcul de l'aire et du centroïde géométrique (Formule de Shoelace)
+        let signedArea = 0;
+        let Cx = 0;
+        let Cy = 0;
+        
+        for (let i = 0; i < pts2D.length; i++) {
+            const p1 = pts2D[i];
+            const p2 = pts2D[(i + 1) % pts2D.length];
+            const cross = (p1.x * p2.y - p2.x * p1.y);
+            signedArea += cross;
+            Cx += (p1.x + p2.x) * cross;
+            Cy += (p1.y + p2.y) * cross;
+        }
+        signedArea /= 2;
+
+        if (Math.abs(signedArea) < 0.1) {
+            const centerLL = map.unproject([avgX, avgY], 12);
+            baryLat = centerLL.lat;
+            baryLon = centerLL.lng;
+        } else {
+            Cx = Cx / (6 * signedArea);
+            Cy = Cy / (6 * signedArea);
+            const centerLL = map.unproject([Cx, Cy], 12);
+            baryLat = centerLL.lat;
+            baryLon = centerLL.lng;
+        }
+    }
+
     const equiElements = [];
+
+    // Tracé de la forme pour la visualisation
+    if (sortedPoints.length >= 3) {
+      const polyCoords = sortedPoints.map(p => [p.lat, p.lon]);
+      equiElements.push(L.polygon(polyCoords, {color: '#7ab8e8', weight: 1.5, opacity: 0.4, dashArray: '4 4', fill: true, fillColor: '#7ab8e8', fillOpacity: 0.05, interactive: false}));
+    }
+
     geoPoints.forEach(p => {
       equiElements.push(L.polyline([[p.lat, p.lon], [baryLat, baryLon]], {color: '#7ab8e8', weight: 1.5, opacity: 0.75, dashArray: '5 4'}));
     });
+    
     equiElements.push(L.circleMarker([baryLat, baryLon], {radius: 5, color: '#111', fillColor: '#7ab8e8', fillOpacity: 1, weight: 2})
-      .bindTooltip('Barycentre géographique (Vol d\'oiseau)', {direction: 'top', offset: [0, -6]}));
+      .bindTooltip("Centre de la forme (Barycentre polygonal)", {direction: 'top', offset: [0, -6]}));
     
     state.equiLayer = L.layerGroup(equiElements);
     if(document.getElementById('tog-equi').checked) state.equiLayer.addTo(map);
@@ -760,12 +896,11 @@ async function calculate(){
     const recCtrl = document.getElementById('recenter-controls');
     if(recCtrl) recCtrl.style.display = 'flex';
 
-    // Remplissage tableau stats dynamiques
     const resDyn = document.getElementById('results-dynamic-stats');
     resDyn.innerHTML = '';
     
-    // Group inputs into pairs for the layout
     let htmlStats = '';
+    let totalSum = 0;
     for(let i=0; i<geoPoints.length; i+=2) {
       htmlStats += `<div class="stat-row">`;
       htmlStats += `<div class="stat-card" style="border-left: 3px solid ${COLORS[i%COLORS.length]}">
@@ -773,12 +908,14 @@ async function calculate(){
         <div class="stat-value">${fmtHHMM(exactTimes[i])}</div>
         <div style="font-size:11px; color:#aaa; margin-top:4px;">${(routes[i].distance/1000).toFixed(1)} km</div>
       </div>`;
+      totalSum += exactTimes[i];
       if(i+1 < geoPoints.length) {
         htmlStats += `<div class="stat-card" style="border-left: 3px solid ${COLORS[(i+1)%COLORS.length]}">
           <div class="stat-label">Trajet ${LETTERS[(i+1)%LETTERS.length]}</div>
           <div class="stat-value">${fmtHHMM(exactTimes[i+1])}</div>
           <div style="font-size:11px; color:#aaa; margin-top:4px;">${(routes[i+1].distance/1000).toFixed(1)} km</div>
         </div>`;
+        totalSum += exactTimes[i+1];
       }
       htmlStats += `</div>`;
     }
@@ -786,9 +923,13 @@ async function calculate(){
 
     document.getElementById('rv-diff').innerHTML = fmtHHMM(maxExactT - minExactT);
     document.getElementById('rv-name').textContent = meetName;
-    document.getElementById('rv-sub').textContent = `Temps estimé moyen : ${fmtHHMM(exactTimes.reduce((a,b)=>a+b,0)/geoPoints.length)}`;
     
-    // Légende
+    let infoTxt = `Temps estimé moyen : ${fmtHHMM(exactTimes.reduce((a,b)=>a+b,0)/geoPoints.length)}`;
+    if(geoPoints.length > 2) {
+        infoTxt += `<br><span style="color:var(--green)">Somme totale optimisée : ${fmtHHMM(totalSum)}</span>`;
+    }
+    document.getElementById('rv-sub').innerHTML = infoTxt;
+    
     const legend = document.getElementById('map-legend');
     if (legend) {
       let html = '<div style="font-weight:600; margin-bottom:10px; font-size:15px; border-bottom:1px solid #444; padding-bottom:6px;">Légende Isochrones</div>';
@@ -807,7 +948,13 @@ async function calculate(){
 
   } catch(e) {
     console.error(e);
-    showErr(e.message || 'Une erreur est survenue. Vérifiez les adresses.');
+    let msg = "Une erreur est survenue. Vérifiez les adresses.";
+    if (e.name === 'AbortError') {
+      msg = "Le serveur de routage public est surchargé et n'a pas répondu à temps. Veuillez réessayer dans quelques instants.";
+    } else if (e.message) {
+      msg = e.message;
+    }
+    showErr(msg);
   } finally { setLoading(false); }
 }
 
