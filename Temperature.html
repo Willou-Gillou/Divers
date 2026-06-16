@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Historique des Températures (v0.2.3)</title>
+    <title>Historique des Températures (v0.2.5)</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -304,7 +304,7 @@
         
         <div class="sidebar-content">
             <div class="form-group">
-                <label>Historique Piscine - Journalier :</label>
+                <label>Historique Piscine - Journalier :<br><small style="font-weight:normal;color:#95a5a6;">(S'ajoute aux données existantes)</small></label>
                 <label for="poolDailyFile" class="file-label">Importer CSV / XLSX</label>
                 <input type="file" id="poolDailyFile" accept=".csv, .xlsx, .xls" style="display: none;" onchange="handleFileEvent(event, 'daily')">
                 <div id="importStatusDaily" class="import-status">✓ Données journalières OK</div>
@@ -400,7 +400,7 @@
 
     <script>
         // APP SETTINGS
-        const APP_VERSION = 'v0.2.3';
+        const APP_VERSION = 'v0.2.5';
         document.getElementById('versionDisplay').textContent = APP_VERSION;
         
         // GLOBAL GRAPH INSTANCES
@@ -864,9 +864,16 @@
             }
 
             if (validLinesCount > 0) {
-                appData.poolDailyData = newPoolData;
+                let addedCount = 0;
+                for (const [date, temp] of Object.entries(newPoolData)) {
+                    if (!(date in appData.poolDailyData) || appData.poolDailyData[date] === null) {
+                        appData.poolDailyData[date] = temp;
+                        addedCount++;
+                    }
+                }
+                const totalCount = Object.keys(appData.poolDailyData).length;
                 forceDataSave();
-                alert("Données journalières importées ! (" + validLinesCount + " jours)");
+                alert("Données journalières ajoutées ! (" + addedCount + " nouveaux relevés, " + totalCount + " jours au total)");
                 chargerDonneesJournalieres();
             } else { alert("Erreur : Format journalier non valide."); }
         }
