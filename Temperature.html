@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Historique des Températures (v0.2.5)</title>
+    <title>Historique des Températures (v0.3.1)</title>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -400,7 +400,7 @@
 
     <script>
         // APP SETTINGS
-        const APP_VERSION = 'v0.2.5';
+        const APP_VERSION = 'v0.3.1';
         document.getElementById('versionDisplay').textContent = APP_VERSION;
         
         // GLOBAL GRAPH INSTANCES
@@ -911,7 +911,7 @@
         async function chargerDonneesJournalieres() {
             appData.userPostalCode = document.getElementById('cp').value.trim();
             appData.startDate = document.getElementById('startDate').value || '2024-01-01';
-            
+
             const cp = appData.userPostalCode;
             const startDate = appData.startDate;
             const errorMsg = document.getElementById('errorMsgDaily');
@@ -919,23 +919,27 @@
 
             const todayStr = new Date().toISOString().split('T')[0];
             const datesArr = generateDateRange(startDate, todayStr);
-            
+
             let airTempsMap = {};
             let ville = 'Inconnue';
+            let coordinates = null;
 
             if (cp && /^\d{5}$/.test(cp)) {
                 try {
                     const geoResponse = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${cp}&postcode=${cp}&limit=1`);
                     const geoData = await geoResponse.json();
                     if (geoData.features && geoData.features.length > 0) {
-                        const coordinates = geoData.features[0].geometry.coordinates;
+                        coordinates = geoData.features[0].geometry.coordinates;
                         ville = geoData.features[0].properties.city;
 
+                        // Étendre la plage à startDate-2ans pour couvrir N-1 et N-2
+                        const startYear = parseInt(startDate.split('-')[0]);
+                        const extendedStart = `${startYear - 2}-${startDate.split('-')[1]}-${startDate.split('-')[2]}`;
                         const endDateObj = new Date();
                         endDateObj.setDate(endDateObj.getDate() - 5);
                         const endDate = endDateObj.toISOString().split('T')[0];
 
-                        const meteoUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${coordinates[1]}&longitude=${coordinates[0]}&start_date=${startDate}&end_date=${endDate}&daily=temperature_2m_mean&timezone=Europe%2FParis`;
+                        const meteoUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${coordinates[1]}&longitude=${coordinates[0]}&start_date=${extendedStart}&end_date=${endDate}&daily=temperature_2m_mean&timezone=Europe%2FParis`;
                         const meteoResponse = await fetch(meteoUrl);
                         const meteoData = await meteoResponse.json();
 
@@ -952,48 +956,146 @@
             const airTemperatures = datesArr.map(d => airTempsMap[d] !== undefined ? airTempsMap[d] : null);
             const poolTemperatures = datesArr.map(d => poolDailyObj[d] !== undefined ? poolDailyObj[d] : null);
 
-            afficherGraphiqueJournalier(datesArr, airTemperatures, poolTemperatures, ville);
+            // Construction des données comparatives N-1 et N-2
+            // Condition : eau ET air doivent être connus pour la date antérieure
+            const compData = { 1: { pool: [], air: [] }, 2: { pool: [], air: [] } };
+            for (const offset of [1, 2]) {
+                for (const d of datesArr) {
+                    const arr = d.split('-');
+                    const prevDate = `${parseInt(arr[0]) - offset}-${arr[1]}-${arr[2]}`;
+                    const poolVal = poolDailyObj[prevDate];
+                    const airVal = airTempsMap[prevDate];
+                    const hasPool = poolVal !== undefined && poolVal !== null;
+                    const hasAir = airVal !== undefined && airVal !== null;
+                    // N'ajouter que si les 2 sont présents
+                    compData[offset].pool.push(hasPool && hasAir ? poolVal : null);
+                    compData[offset].air.push(hasPool && hasAir ? airVal : null);
+                }
+            }
+
+            afficherGraphiqueJournalier(datesArr, airTemperatures, poolTemperatures, ville, compData);
             forceDataSave();
         }
 
-        function afficherGraphiqueJournalier(dates, airTemperatures, poolTemperatures, ville) {
+        
+        function afficherGraphiqueJournalier(dates, airTemperatures, poolTemperatures, ville, compData) {
             const ctx = document.getElementById('dailyChart').getContext('2d');
             if (dailyChartInstance) dailyChartInstance.destroy();
+
+            // Supprimer tooltip custom précédent si existant
+            const oldTip = document.getElementById('dailyTooltip');
+            if (oldTip) oldTip.remove();
+
+            const currentYear = dates.length > 0 ? parseInt(dates[dates.length - 1].split('-')[0]) : new Date().getFullYear();
+            const y0 = currentYear, y1 = currentYear - 1, y2 = currentYear - 2;
+
+            const fmt = v => (v !== null && v !== undefined && !isNaN(v)) ? parseFloat(v).toFixed(1) + ' °C' : '–';
 
             dailyChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: dates.map(d => {
-                        const arr = d.split('-');
-                        return new Date(arr[0], arr[1]-1, arr[2]).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short', year: 'numeric'});
+                        const a = d.split('-');
+                        return new Date(parseInt(a[0]), parseInt(a[1])-1, parseInt(a[2])).toLocaleDateString('fr-FR', {day: 'numeric', month: 'short', year: 'numeric'});
                     }),
                     datasets: [
                         {
-                            label: `Temp. Air Moyenne (°C) - ${ville}`,
+                            label: 'Temp. Air (°C) - ' + ville,
                             data: airTemperatures,
-                            borderColor: 'rgba(230, 126, 34, 0.4)',
-                            backgroundColor: 'rgba(230, 126, 34, 0.05)',
+                            borderColor: 'rgba(230, 126, 34, 0.5)',
+                            backgroundColor: 'rgba(230, 126, 34, 0.07)',
                             borderWidth: 1.5, pointRadius: 0, fill: true, tension: 0.1, spanGaps: true
                         },
                         {
-                            label: `Temp. Eau Journalière (°C)`,
+                            label: 'Temp. Eau (°C)',
                             data: poolTemperatures,
                             borderColor: '#3498db', backgroundColor: 'transparent',
-                            borderWidth: 2, pointRadius: 0, pointHoverRadius: 6, fill: false, tension: 0.1, spanGaps: true 
+                            borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, fill: false, tension: 0.1, spanGaps: true
                         }
                     ]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
-                    plugins: { tooltip: { backgroundColor: 'rgba(44, 62, 80, 0.9)' } },
+                    plugins: {
+                        legend: { display: true },
+                        tooltip: { enabled: false }
+                    },
                     scales: {
                         x: { grid: { display: false }, ticks: { maxTicksLimit: 20, minRotation: 90, maxRotation: 90 } },
                         y: { title: { display: true, text: 'Température (°C)' }, grid: { color: '#eef2f3' } }
                     }
                 }
             });
+
+            // Tooltip custom via mousemove direct sur le canvas
+            const tip = document.createElement('div');
+            tip.id = 'dailyTooltip';
+            tip.style.cssText = 'display:none;position:fixed;pointer-events:none;background:rgba(30,39,46,0.96);color:#fff;border-radius:10px;padding:12px 16px;font-size:12px;line-height:1.7;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,0.35);min-width:220px;';
+            document.body.appendChild(tip);
+
+            const canvas = document.getElementById('dailyChart');
+
+            canvas.addEventListener('mousemove', function(e) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // Trouver l'index du point le plus proche sur l'axe X
+                const points = dailyChartInstance.getElementsAtEventForMode(e, 'index', { intersect: false }, true);
+                if (!points || points.length === 0) { tip.style.display = 'none'; return; }
+
+                const i = points[0].index;
+                if (!dates[i]) { tip.style.display = 'none'; return; }
+
+                const dp = dates[i].split('-');
+                const dateLabel = new Date(parseInt(dp[0]), parseInt(dp[1])-1, parseInt(dp[2])).toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'});
+
+                const aC = fmt(airTemperatures[i]);
+                const eC = fmt(poolTemperatures[i]);
+                const a1 = (compData && compData[1]) ? fmt(compData[1].air[i]) : '–';
+                const e1 = (compData && compData[1]) ? fmt(compData[1].pool[i]) : '–';
+                const a2 = (compData && compData[2]) ? fmt(compData[2].air[i]) : '–';
+                const e2 = (compData && compData[2]) ? fmt(compData[2].pool[i]) : '–';
+
+                tip.innerHTML =
+                    '<div style="font-weight:700;font-size:13px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:6px;color:#ecf0f1;">' + dateLabel + '</div>' +
+                    '<table style="border-collapse:collapse;width:100%;">' +
+                    '<tr style="color:#aab;font-size:11px;font-weight:600;">' +
+                      '<th style="text-align:left;padding-bottom:5px;"></th>' +
+                      '<th style="text-align:right;padding:0 6px;">' + y0 + '</th>' +
+                      '<th style="text-align:right;padding:0 6px;">' + y1 + '</th>' +
+                      '<th style="text-align:right;padding:0 6px;">' + y2 + '</th>' +
+                    '</tr>' +
+                    '<tr>' +
+                      '<td style="padding:3px 10px 3px 0;color:#f39c12;white-space:nowrap;">🌡 Air</td>' +
+                      '<td style="padding:3px 6px;text-align:right;font-weight:700;color:#f39c12;">' + aC + '</td>' +
+                      '<td style="padding:3px 6px;text-align:right;color:#aab;">' + a1 + '</td>' +
+                      '<td style="padding:3px 6px;text-align:right;color:#778;">' + a2 + '</td>' +
+                    '</tr>' +
+                    '<tr>' +
+                      '<td style="padding:3px 10px 3px 0;color:#5dade2;white-space:nowrap;">💧 Eau</td>' +
+                      '<td style="padding:3px 6px;text-align:right;font-weight:700;color:#5dade2;">' + eC + '</td>' +
+                      '<td style="padding:3px 6px;text-align:right;color:#aab;">' + e1 + '</td>' +
+                      '<td style="padding:3px 6px;text-align:right;color:#778;">' + e2 + '</td>' +
+                    '</tr>' +
+                    '</table>';
+
+                tip.style.display = 'block';
+                // Positionnement suivant la souris (fixed par rapport au viewport)
+                let lx = e.clientX + 18;
+                let ly = e.clientY - 60;
+                if (lx + 250 > window.innerWidth) lx = e.clientX - 260;
+                if (ly < 0) ly = 0;
+                tip.style.left = lx + 'px';
+                tip.style.top = ly + 'px';
+            });
+
+            canvas.addEventListener('mouseleave', function() {
+                tip.style.display = 'none';
+            });
         }
+
         
         function afficherGraphiqueHoraire() {
             const poolHourlyObj = appData.poolHourlyData;
