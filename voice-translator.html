@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#01696f" />
-  <title>Voice Translator v7</title>
+  <title>Voice Translator v8</title>
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <style>
     :root, [data-theme="light"] {
@@ -97,7 +97,7 @@
             </svg>
           </div>
           <div>
-            <div class="label">Capture vocale mobile — v7</div>
+            <div class="label">Capture vocale mobile — v8</div>
             <h1>Détection automatique multilingue et traduction vers la langue de votre choix.</h1>
           </div>
         </div>
@@ -121,7 +121,7 @@
       <div class="status">
         <span class="pill"><strong id="supportSpeech">Vérification…</strong></span>
         <span class="pill">Mode <strong>automatique</strong></span>
-        <span class="pill">Version <strong>v7</strong></span>
+        <span class="pill">Version <strong>v8</strong></span>
       </div>
     </section>
 
@@ -403,10 +403,44 @@
         return code.startsWith('ar-') ? 'ar' : code;
       }
 
+      // Dictionnaires d'adaptation dialectale appliqués après traduction en arabe standard,
+      // pour que le résultat affiché et lu diffère réellement selon le dialecte choisi.
+      // Ce ne sont pas des traductions professionnelles, mais des substitutions lexicales
+      // courantes qui donnent une coloration dialectale reconnaissable au texte standard.
+      const DIALECT_WORD_MAPS = {
+        'ar-TN': {
+          'ماذا': 'شنوة', 'كيف': 'كيفاش', 'الآن': 'توا', 'كثير': 'برشا', 'جيد': 'باهي',
+          'أريد': 'نحب', 'لا يوجد': 'ماكانش', 'شكرا': 'يعيشك', 'ذهبت': 'مشيت', 'أين': 'وين',
+          'ماذا تفعل': 'شنوة تعمل', 'حسنا': 'ياخي', 'مع السلامة': 'بسلامة'
+        },
+        'ar-DZ': {
+          'ماذا': 'واش', 'كيف': 'كيفاش', 'الآن': 'دروك', 'كثير': 'بزاف', 'جيد': 'مليح',
+          'أريد': 'نبغي', 'لا يوجد': 'ماكاش', 'شكرا': 'صحيت', 'ذهبت': 'رحت', 'أين': 'وين',
+          'ماذا تفعل': 'واش راك دير', 'حسنا': 'واخا', 'مع السلامة': 'بسلامة'
+        },
+        'ar-MA': {
+          'ماذا': 'أشنو', 'كيف': 'كيفاش', 'الآن': 'دابا', 'كثير': 'بزاف', 'جيد': 'مزيان',
+          'أريد': 'بغيت', 'لا يوجد': 'ماكاينش', 'شكرا': 'شكرا بزاف', 'ذهبت': 'مشيت', 'أين': 'فين',
+          'ماذا تفعل': 'أشنو كتدير', 'حسنا': 'واخا', 'مع السلامة': 'بسلامة'
+        }
+      };
+
+      function adaptToDialect(standardArabicText, dialectCode) {
+        const map = DIALECT_WORD_MAPS[dialectCode];
+        if (!map) return standardArabicText;
+        let adapted = standardArabicText;
+        // Remplace les expressions les plus longues en premier pour éviter les collisions partielles.
+        const entries = Object.entries(map).sort((a, b) => b[0].length - a[0].length);
+        for (const [standardWord, dialectWord] of entries) {
+          adapted = adapted.split(standardWord).join(dialectWord);
+        }
+        return adapted;
+      }
+
       async function translateText(text, sourceCode, targetCode) {
         const apiSource = normalizeArabicForApi(sourceCode);
         const apiTarget = normalizeArabicForApi(targetCode);
-        if (apiSource && apiTarget && apiSource === apiTarget) {
+        if (apiSource && apiTarget && apiSource === apiTarget && sourceCode === targetCode) {
           return text;
         }
         const providers = [
@@ -416,15 +450,22 @@
           { name: 'LibreTranslate.de', run: () => translateViaLibreDe(text, apiSource, apiTarget) }
         ];
         let lastError = null;
+        let standardResult = null;
         for (const provider of providers) {
           try {
             const result = await provider.run();
-            if (result && result.trim()) return result;
+            if (result && result.trim()) { standardResult = result; break; }
           } catch (err) {
             lastError = new Error(`${provider.name}: ${err.message || err}`);
           }
         }
-        throw lastError || new Error('Tous les services de traduction ont échoué');
+        if (!standardResult) throw lastError || new Error('Tous les services de traduction ont échoué');
+
+        // Si la cible est un dialecte maghrébin, on adapte lexicalement le résultat standard.
+        if (targetCode && targetCode.startsWith('ar-')) {
+          return adaptToDialect(standardResult, targetCode);
+        }
+        return standardResult;
       }
 
       async function autoProcess() {
@@ -558,7 +599,7 @@
       copySourceBtn.addEventListener('click', () => copyText(sourceText.value, 'Texte source copié.'));
       copyTranslationBtn.addEventListener('click', () => copyText(translatedText.value, 'Traduction copiée.'));
 
-      const BCP47_BY_LANG = { fr: 'fr-FR', en: 'en-US', es: 'es-ES', pt: 'pt-PT', it: 'it-IT', de: 'de-DE', ar: 'ar-SA' };
+      const BCP47_BY_LANG = { fr: 'fr-FR', en: 'en-US', es: 'es-ES', pt: 'pt-PT', it: 'it-IT', de: 'de-DE', ar: 'ar-SA', 'ar-TN': 'ar-TN', 'ar-DZ': 'ar-DZ', 'ar-MA': 'ar-MA' };
       const speakBtn = document.getElementById('speakBtn');
       let cachedVoices = [];
 
@@ -599,15 +640,37 @@
         }
         window.speechSynthesis.cancel();
         const targetCode = targetLangSelect.value;
-        const bcp47 = BCP47_BY_LANG[targetCode] || 'fr-FR';
+        const preferredBcp47 = BCP47_BY_LANG[targetCode] || 'fr-FR';
+
+        let voice = pickBestVoice(preferredBcp47);
+        let effectiveLang = preferredBcp47;
+        let dialectFallbackNote = '';
+
+        // Aucun appareil ne propose encore de voix dédiées aux dialectes maghrébins (ar-TN/ar-DZ/ar-MA) :
+        // on retombe alors sur la meilleure voix arabe disponible (souvent ar-SA) pour au moins produire du son,
+        // et on prévient clairement l'utilisateur que la prononciation sera celle de l'arabe standard.
+        if (!voice && preferredBcp47.startsWith('ar-') && preferredBcp47 !== 'ar-SA') {
+          voice = pickBestVoice('ar-SA');
+          if (voice) {
+            effectiveLang = 'ar-SA';
+            dialectFallbackNote = ' Aucune voix dédiée à ce dialecte n’est disponible sur cet appareil : lecture avec une voix arabe standard.';
+          }
+        }
+
+        if (!voice && !cachedVoices.some(v => v.lang.toLowerCase().startsWith('ar'))) {
+          setState('Aucune voix arabe n’est installée sur cet appareil pour la lecture vocale. Essayez avec une autre langue cible ou installez une voix arabe dans les paramètres du système.', 'warning');
+        }
+
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = bcp47;
-        const voice = pickBestVoice(bcp47);
+        utterance.lang = effectiveLang;
         if (voice) utterance.voice = voice;
         utterance.rate = 1;
         utterance.pitch = 1;
         speakBtn.disabled = true;
         speakBtn.innerHTML = '<span aria-hidden="true">🔈</span><span>Lecture en cours…</span>';
+        utterance.onstart = () => {
+          if (dialectFallbackNote) setState(`Lecture en cours.${dialectFallbackNote}`, 'warning');
+        };
         utterance.onend = () => {
           speakBtn.disabled = false;
           speakBtn.innerHTML = '<span aria-hidden="true">🔊</span><span>Écouter la traduction</span>';
@@ -615,7 +678,7 @@
         utterance.onerror = () => {
           speakBtn.disabled = false;
           speakBtn.innerHTML = '<span aria-hidden="true">🔊</span><span>Écouter la traduction</span>';
-          setState('Erreur lors de la lecture vocale.', 'error');
+          setState('Erreur lors de la lecture vocale. Vérifiez qu’une voix compatible est installée sur l’appareil.', 'error');
         };
         window.speechSynthesis.speak(utterance);
       }
