@@ -44,7 +44,7 @@
     .logo{width:2.8rem;height:2.8rem;border-radius:0.9rem;background:var(--color-primary);color:var(--color-text-inverse);display:grid;place-items:center;box-shadow:var(--shadow-md);flex:0 0 auto}
     .logo svg{width:1.5rem;height:1.5rem}
     h1{font-size:var(--text-xl);line-height:1.08;letter-spacing:-0.03em}
-    .subtitle{color:var(--color-text-muted);max-width:34ch}
+    .subtitle{color:var(--color-text-muted);max-width:36ch}
     .toggle{min-width:44px;min-height:44px;border-radius:var(--radius-full);display:grid;place-items:center;background:var(--color-surface-2);border:1px solid color-mix(in oklab, var(--color-text) 10%, transparent)}
     .grid{display:grid;gap:var(--space-4)}
     .panel{padding:var(--space-5);display:grid;gap:var(--space-4)}
@@ -53,7 +53,10 @@
     .status{display:flex;flex-wrap:wrap;gap:var(--space-2)}
     .pill{display:inline-flex;align-items:center;gap:0.5rem;padding:0.6rem 0.8rem;border-radius:var(--radius-full);background:var(--color-surface-offset);font-size:var(--text-sm);color:var(--color-text-muted)}
     .pill strong{color:var(--color-text)}
-    .controls{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)}
+    .lang-flags{display:flex;flex-wrap:wrap;gap:var(--space-2)}
+    .lang-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.5rem .8rem;border-radius:var(--radius-full);background:var(--color-surface-offset);font-size:var(--text-xs);font-weight:700;color:var(--color-text-muted)}
+    .lang-chip.active{background:var(--color-primary);color:var(--color-text-inverse)}
+    .controls{display:grid;grid-template-columns:1fr;gap:var(--space-3)}
     .btn{min-height:52px;border-radius:var(--radius-lg);padding:0.9rem 1rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:0.7rem;transition:transform var(--transition),background var(--transition),border-color var(--transition),color var(--transition)}
     .btn:active{transform:translateY(1px) scale(.995)}
     .btn-primary{background:var(--color-primary);color:var(--color-text-inverse);box-shadow:var(--shadow-md)}
@@ -67,7 +70,6 @@
     .metric .value{font-size:var(--text-lg);font-weight:700;line-height:1.1;margin-top:0.15rem}
     .notice{padding:0.9rem 1rem;border-radius:var(--radius-lg);background:var(--color-primary-highlight);color:var(--color-text)}
     .footer-note{font-size:var(--text-sm);color:var(--color-text-muted)}
-    .lang-select{width:100%;min-height:52px;border-radius:var(--radius-lg);padding:0.9rem 1rem;background:var(--color-surface-2);border:1px solid color-mix(in oklab, var(--color-text) 12%, transparent)}
     .actions-inline{display:flex;gap:var(--space-3);flex-wrap:wrap}
     .small{font-size:var(--text-sm);color:var(--color-text-muted)}
     .success{color:var(--color-success)} .error{color:var(--color-error)} .warning{color:var(--color-warning)}
@@ -75,7 +77,7 @@
     .pulse::after{content:'';width:10px;height:10px;border-radius:50%;background:currentColor;display:inline-block;box-shadow:0 0 0 0 currentColor;animation:pulse 1.5s infinite;margin-left:.35rem}
     @keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in oklab,currentColor 50%,transparent)}70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-    @media (max-width: 640px){.controls,.meta{grid-template-columns:1fr}.app{padding-inline:var(--space-3)}.hero,.panel{padding:var(--space-4)}h1{max-width:12ch}}
+    @media (max-width: 640px){.meta{grid-template-columns:1fr}.app{padding-inline:var(--space-3)}.hero,.panel{padding:var(--space-4)}h1{max-width:14ch}}
     @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important}}
   </style>
 </head>
@@ -95,46 +97,42 @@
           </div>
           <div>
             <div class="label">Capture vocale mobile</div>
-            <h1>Parlez, détectez la langue et obtenez la traduction en français.</h1>
+            <h1>Parlez en anglais, espagnol, portugais ou arabe. La traduction en français se fait automatiquement.</h1>
           </div>
         </div>
         <button class="toggle" type="button" data-theme-toggle aria-label="Basculer le thème">
           <span aria-hidden="true">◐</span>
         </button>
       </div>
-      <p class="subtitle">Cette application web fonctionne sur téléphone, utilise la reconnaissance vocale du navigateur quand elle est disponible, détecte automatiquement la langue probable du texte et traduit en français via un service de traduction public configuré côté client.</p>
+      <p class="subtitle">La langue parlée est détectée automatiquement parmi quatre langues prises en charge, et le texte est traduit en français sans action manuelle.</p>
+      <div class="lang-flags">
+        <span class="lang-chip">🇬🇧 Anglais</span>
+        <span class="lang-chip">🇪🇸 Espagnol</span>
+        <span class="lang-chip">🇵🇹 Portugais</span>
+        <span class="lang-chip">🇸🇦 Arabe</span>
+      </div>
       <div class="status">
         <span class="pill"><strong id="supportSpeech">Vérification…</strong></span>
         <span class="pill">Cible <strong>français</strong></span>
-        <span class="pill">Usage <strong>PWA léger</strong></span>
+        <span class="pill">Mode <strong>automatique</strong></span>
       </div>
     </section>
 
     <section class="panel card">
-      <div class="row">
-        <label class="label" for="targetLang">Langue de sortie</label>
-        <select id="targetLang" class="lang-select">
-          <option value="fr">Français</option>
-        </select>
-      </div>
       <div class="controls">
         <button id="recordBtn" class="btn btn-primary" type="button">
           <span aria-hidden="true">🎙️</span>
-          <span>Commencer</span>
-        </button>
-        <button id="translateBtn" class="btn btn-secondary" type="button">
-          <span aria-hidden="true">✍️</span>
-          <span>Traduire le texte</span>
+          <span>Commencer l'écoute</span>
         </button>
       </div>
       <div id="liveState" class="small">Prêt à écouter.</div>
-      <div class="notice small">Sur iPhone et certains navigateurs, la capture vocale dépend du support Web Speech. Si l’écoute n’est pas disponible, vous pouvez coller ou dicter via le clavier vocal du téléphone, puis lancer la traduction.</div>
+      <div class="notice small">Sur certains navigateurs mobiles, la reconnaissance vocale automatique peut être limitée. En alternative, dictez avec le clavier vocal du téléphone directement dans le champ ci-dessous : la détection et la traduction se déclenchent automatiquement.</div>
     </section>
 
     <section class="panel card">
       <div class="row">
-        <label class="label" for="sourceText">Texte capturé</label>
-        <textarea id="sourceText" class="textarea" placeholder="Le texte reconnu apparaîtra ici, ou vous pouvez coller un texte dans n'importe quelle langue."></textarea>
+        <label class="label" for="sourceText">Texte capturé (anglais, espagnol, portugais ou arabe)</label>
+        <textarea id="sourceText" class="textarea" placeholder="Le texte reconnu apparaît ici automatiquement pendant que vous parlez, ou collez / dictez un texte."></textarea>
       </div>
       <div class="actions-inline">
         <button id="clearBtn" class="btn btn-secondary" type="button">Effacer</button>
@@ -154,13 +152,13 @@
         </div>
       </div>
       <div class="row">
-        <label class="label" for="translatedText">Traduction en français</label>
-        <textarea id="translatedText" class="textarea" placeholder="La traduction en français apparaîtra ici."></textarea>
+        <label class="label" for="translatedText">Traduction automatique en français</label>
+        <textarea id="translatedText" class="textarea" placeholder="La traduction en français apparaît ici automatiquement." readonly></textarea>
       </div>
       <div class="actions-inline">
         <button id="copyTranslationBtn" class="btn btn-primary" type="button">Copier la traduction</button>
       </div>
-      <p class="footer-note">Astuce mobile : ajoutez cette page à l’écran d’accueil pour un accès rapide, puis autorisez le micro lors du premier lancement.</p>
+      <p class="footer-note">Astuce mobile : ajoutez cette page à l'écran d'accueil pour un accès rapide, puis autorisez le micro lors du premier lancement.</p>
     </section>
   </main>
 
@@ -177,7 +175,6 @@
 
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recordBtn = document.getElementById('recordBtn');
-      const translateBtn = document.getElementById('translateBtn');
       const clearBtn = document.getElementById('clearBtn');
       const copySourceBtn = document.getElementById('copySourceBtn');
       const copyTranslationBtn = document.getElementById('copyTranslationBtn');
@@ -189,15 +186,38 @@
       const supportSpeech = document.getElementById('supportSpeech');
       let recognition = null;
       let isRecording = false;
+      let debounceTimer = null;
+      let lastTranslatedValue = '';
 
-      const languageNames = new Intl.DisplayNames(['fr'], { type: 'language' });
-      const fallbackPatterns = [
-        { code: 'fr', name: 'français', score: t => /\b(le|la|les|des|une|un|je|tu|vous|nous|est|suis|avec|pour|pas)\b/i.test(t) ? 0.94 : 0.2 },
-        { code: 'en', name: 'anglais', score: t => /\b(the|and|you|are|is|this|that|with|for|not|have)\b/i.test(t) ? 0.9 : 0.18 },
-        { code: 'es', name: 'espagnol', score: t => /\b(el|la|los|las|una|uno|usted|gracias|por|para|está|hola)\b/i.test(t) ? 0.9 : 0.16 },
-        { code: 'de', name: 'allemand', score: t => /\b(der|die|das|und|ich|nicht|mit|ist|ein|eine|danke)\b/i.test(t) ? 0.88 : 0.14 },
-        { code: 'it', name: 'italien', score: t => /\b(il|lo|gli|ciao|grazie|per|con|sono|non|una)\b/i.test(t) ? 0.88 : 0.14 },
-        { code: 'pt', name: 'portugais', score: t => /\b(olá|obrigado|você|com|para|não|uma|está|que)\b/i.test(t) ? 0.88 : 0.14 }
+      const SUPPORTED_LANGS = [
+        {
+          code: 'en', name: 'anglais', recogLang: 'en-US',
+          score: t => {
+            const hits = (t.match(/\b(the|and|you|are|is|this|that|with|for|not|have|what|hello|thanks)\b/gi) || []).length;
+            return Math.min(0.5 + hits * 0.08, 0.97);
+          }
+        },
+        {
+          code: 'es', name: 'espagnol', recogLang: 'es-ES',
+          score: t => {
+            const hits = (t.match(/\b(el|la|los|las|una|uno|usted|gracias|por|para|está|hola|qué|cómo)\b/gi) || []).length;
+            return Math.min(0.5 + hits * 0.08, 0.97);
+          }
+        },
+        {
+          code: 'pt', name: 'portugais', recogLang: 'pt-PT',
+          score: t => {
+            const hits = (t.match(/\b(olá|obrigado|você|com|para|não|uma|está|que|isso|também)\b/gi) || []).length;
+            return Math.min(0.5 + hits * 0.08, 0.97);
+          }
+        },
+        {
+          code: 'ar', name: 'arabe', recogLang: 'ar-SA',
+          score: t => {
+            const arabicChars = (t.match(/[\u0600-\u06FF]/g) || []).length;
+            return arabicChars > 0 ? Math.min(0.6 + arabicChars * 0.02, 0.98) : 0.05;
+          }
+        }
       ];
 
       function setState(message, tone = '') {
@@ -219,36 +239,35 @@
         const clean = text.trim();
         if (!clean) return { code: null, name: '—', confidence: null };
 
+        const arabicChars = (clean.match(/[\u0600-\u06FF]/g) || []).length;
+        if (arabicChars > 0) {
+          const arLang = SUPPORTED_LANGS.find(l => l.code === 'ar');
+          return { code: 'ar', name: arLang.name, confidence: arLang.score(clean) };
+        }
+
         if ('ai' in self && self.ai?.languageDetector) {
           try {
             const detector = await self.ai.languageDetector.create();
             const result = await detector.detect(clean);
             if (result?.length) {
-              const top = result[0];
-              return {
-                code: top.detectedLanguage,
-                name: languageNames.of(top.detectedLanguage) || top.detectedLanguage,
-                confidence: top.confidence
-              };
+              const top = result.find(r => SUPPORTED_LANGS.some(l => l.code === r.detectedLanguage)) || result[0];
+              const match = SUPPORTED_LANGS.find(l => l.code === top.detectedLanguage);
+              if (match) return { code: match.code, name: match.name, confidence: top.confidence };
             }
           } catch {}
         }
 
-        const scored = fallbackPatterns
+        const scored = SUPPORTED_LANGS
           .map(item => ({ ...item, confidence: item.score(clean) }))
           .sort((a, b) => b.confidence - a.confidence)[0];
 
-        return {
-          code: scored.code,
-          name: scored.name,
-          confidence: scored.confidence
-        };
+        return { code: scored.code, name: scored.name, confidence: scored.confidence };
       }
 
-      async function translateToFrench(text) {
+      async function translateToFrench(text, sourceCode) {
         const body = new URLSearchParams({
           q: text,
-          source: 'auto',
+          source: sourceCode || 'auto',
           target: 'fr',
           format: 'text'
         });
@@ -262,47 +281,49 @@
         return data.translatedText || '';
       }
 
-      async function runTranslation() {
+      async function autoProcess() {
         const text = sourceText.value.trim();
-        if (!text) {
-          setState('Ajoutez ou dictez un texte avant de traduire.', 'warning');
-          return;
-        }
-        translateBtn.disabled = true;
-        setState('Détection de langue et traduction en cours…');
+        if (!text || text === lastTranslatedValue) return;
+        setState('Détection de la langue et traduction automatique en cours…');
         try {
           const detected = await detectLanguage(text);
           detectedLang.textContent = detected.name || 'Inconnue';
           confidence.textContent = detected.confidence ? `${Math.round(detected.confidence * 100)} %` : '—';
-          const translated = await translateToFrench(text);
+          const translated = await translateToFrench(text, detected.code);
           translatedText.value = translated;
-          setState('Traduction terminée.', 'success');
+          lastTranslatedValue = text;
+          setState('Traduction automatique terminée.', 'success');
         } catch {
-          setState('Échec de traduction. Vérifiez la connexion réseau ou réessayez.', 'error');
-        } finally {
-          translateBtn.disabled = false;
+          setState('Échec de traduction automatique. Vérifiez la connexion réseau.', 'error');
         }
       }
+
+      function scheduleAutoProcess(delay = 900) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(autoProcess, delay);
+      }
+
+      sourceText.addEventListener('input', () => scheduleAutoProcess(1000));
 
       function setupSpeech() {
         if (!SpeechRecognition) {
           supportSpeech.textContent = 'Micro navigateur indisponible';
           recordBtn.disabled = true;
-          setState('La reconnaissance vocale native n’est pas prise en charge ici. Utilisez le clavier vocal puis traduisez.', 'warning');
+          setState('La reconnaissance vocale native n’est pas prise en charge ici. Dictez via le clavier vocal : la traduction se lancera automatiquement.', 'warning');
           return;
         }
 
         supportSpeech.textContent = 'Micro navigateur disponible';
         recognition = new SpeechRecognition();
-        recognition.lang = 'fr-FR';
         recognition.interimResults = true;
         recognition.continuous = true;
         recognition.maxAlternatives = 1;
+        recognition.lang = 'en-US';
 
         recognition.onstart = () => {
           isRecording = true;
-          recordBtn.innerHTML = '<span aria-hidden="true">⏹️</span><span>Arrêter</span>';
-          setState('Écoute en cours…', 'success pulse');
+          recordBtn.innerHTML = '<span aria-hidden="true">⏹️</span><span>Arrêter l\'écoute</span>';
+          setState('Écoute en cours (anglais, espagnol, portugais, arabe)…', 'success pulse');
         };
 
         recognition.onresult = (event) => {
@@ -315,6 +336,7 @@
           }
           const base = sourceText.value.replace(/\s+$/,'');
           sourceText.value = [base, finalText.trim(), interimText.trim()].filter(Boolean).join(base ? ' ' : '');
+          if (finalText.trim()) scheduleAutoProcess(400);
         };
 
         recognition.onerror = (event) => {
@@ -329,8 +351,9 @@
 
         recognition.onend = () => {
           isRecording = false;
-          recordBtn.innerHTML = '<span aria-hidden="true">🎙️</span><span>Commencer</span>';
-          if (!liveState.textContent.includes('Erreur')) setState('Capture arrêtée. Vous pouvez traduire.', '');
+          recordBtn.innerHTML = '<span aria-hidden="true">🎙️</span><span>Commencer l\'écoute</span>';
+          if (!liveState.textContent.includes('Erreur')) setState('Écoute arrêtée. Traduction automatique disponible.', '');
+          scheduleAutoProcess(200);
         };
       }
 
@@ -347,12 +370,12 @@
         }
       });
 
-      translateBtn.addEventListener('click', runTranslation);
       clearBtn.addEventListener('click', () => {
         sourceText.value = '';
         translatedText.value = '';
         detectedLang.textContent = '—';
         confidence.textContent = '—';
+        lastTranslatedValue = '';
         setState('Champs effacés.');
       });
       copySourceBtn.addEventListener('click', () => copyText(sourceText.value, 'Texte source copié.'));
