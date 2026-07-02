@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#01696f" />
-  <title>Voice Translator v5</title>
+  <title>Voice Translator v6</title>
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
   <style>
     :root, [data-theme="light"] {
@@ -68,6 +68,7 @@
     .metric{padding:var(--space-4);border-radius:var(--radius-lg);background:var(--color-surface-2);border:1px solid color-mix(in oklab, var(--color-text) 8%, transparent)}
     .metric .value{font-size:var(--text-lg);font-weight:700;line-height:1.1;margin-top:0.15rem}
     .notice{padding:0.9rem 1rem;border-radius:var(--radius-lg);background:var(--color-primary-highlight);color:var(--color-text)}
+    .notice.warning{background:color-mix(in oklab, var(--color-warning) 22%, var(--color-surface))}
     .footer-note{font-size:var(--text-sm);color:var(--color-text-muted)}
     .actions-inline{display:flex;gap:var(--space-3);flex-wrap:wrap}
     .small{font-size:var(--text-sm);color:var(--color-text-muted)}
@@ -96,7 +97,7 @@
             </svg>
           </div>
           <div>
-            <div class="label">Capture vocale mobile — v5</div>
+            <div class="label">Capture vocale mobile — v6</div>
             <h1>Détection automatique multilingue et traduction vers la langue de votre choix.</h1>
           </div>
         </div>
@@ -109,7 +110,10 @@
         <span class="lang-chip">🇬🇧 Anglais</span>
         <span class="lang-chip">🇪🇸 Espagnol</span>
         <span class="lang-chip">🇵🇹 Portugais</span>
-        <span class="lang-chip">🇸🇦 Arabe</span>
+        <span class="lang-chip">🇸🇦 Arabe standard</span>
+        <span class="lang-chip">🇹🇳 Arabe tunisien</span>
+        <span class="lang-chip">🇩🇿 Arabe algérien</span>
+        <span class="lang-chip">🇲🇦 Arabe marocain</span>
         <span class="lang-chip">🇮🇹 Italien</span>
         <span class="lang-chip">🇩🇪 Allemand</span>
         <span class="lang-chip">🇫🇷 Français</span>
@@ -117,11 +121,20 @@
       <div class="status">
         <span class="pill"><strong id="supportSpeech">Vérification…</strong></span>
         <span class="pill">Mode <strong>automatique</strong></span>
-        <span class="pill">Version <strong>v5</strong></span>
+        <span class="pill">Version <strong>v6</strong></span>
       </div>
     </section>
 
     <section class="panel card">
+      <div class="row">
+        <label class="label" for="arabicVariant">Variante d'arabe pour la reconnaissance vocale</label>
+        <select id="arabicVariant" class="lang-select">
+          <option value="ar-SA">Arabe standard (moderne)</option>
+          <option value="ar-TN">Arabe tunisien (dialecte)</option>
+          <option value="ar-DZ">Arabe algérien (dialecte)</option>
+          <option value="ar-MA">Arabe marocain / Darija</option>
+        </select>
+      </div>
       <div class="controls">
         <button id="recordBtn" class="btn btn-primary" type="button">
           <span aria-hidden="true">🎙️</span>
@@ -130,6 +143,7 @@
       </div>
       <div id="liveState" class="small">Prêt à écouter.</div>
       <div class="notice small">Sur certains navigateurs mobiles, la reconnaissance vocale automatique peut être limitée. En alternative, dictez avec le clavier vocal du téléphone directement dans le champ ci-dessous : la détection et la traduction se déclenchent automatiquement.</div>
+      <div id="dialectWarning" class="notice small warning" style="display:none;"></div>
     </section>
 
     <section class="panel card">
@@ -204,6 +218,7 @@
       const confidence = document.getElementById('confidence');
       const supportSpeech = document.getElementById('supportSpeech');
       const targetLangSelect = document.getElementById('targetLang');
+      const arabicVariantSelect = document.getElementById('arabicVariant');
       let recognition = null;
       let isRecording = false;
       let debounceTimer = null;
@@ -266,6 +281,23 @@
         }
       ];
 
+      // Marqueurs lexicaux fréquents pour distinguer les dialectes maghrébins de l'arabe standard,
+      // car le moteur vocal du navigateur ne le fait pas toujours correctement.
+      const MAGHREB_DIALECT_MARKERS = {
+        'ar-TN': ['برشا', 'باهي', 'شنوة', 'توا', 'يزي', 'نحب', 'كيفاش', 'محتاج', 'قاعد'],
+        'ar-DZ': ['واش', 'بزاف', 'راك', 'كاين', 'دروك', 'مليح', 'وقتاش', 'راهو'],
+        'ar-MA': ['بزاف', 'ديال', 'واخا', 'دابا', 'زوين', 'شحال', 'فين', 'بغيت', 'مزيان']
+      };
+
+      function detectMaghrebDialect(text) {
+        let best = { code: null, hits: 0 };
+        for (const [code, markers] of Object.entries(MAGHREB_DIALECT_MARKERS)) {
+          const hits = markers.reduce((count, w) => count + (text.includes(w) ? 1 : 0), 0);
+          if (hits > best.hits) best = { code, hits };
+        }
+        return best.hits > 0 ? best.code : null;
+      }
+
       const LANG_NAMES = { fr: 'français', en: 'anglais', es: 'espagnol', pt: 'portugais', it: 'italien', de: 'allemand', ar: 'arabe' };
 
       function setState(message, tone = '') {
@@ -290,7 +322,10 @@
         const arabicChars = (clean.match(/[\u0600-\u06FF]/g) || []).length;
         if (arabicChars > 0) {
           const arLang = SUPPORTED_LANGS.find(l => l.code === 'ar');
-          return { code: 'ar', name: arLang.name, confidence: arLang.score(clean) };
+          const dialectCode = detectMaghrebDialect(clean);
+          const dialectLabels = { 'ar-TN': 'arabe (dialecte tunisien)', 'ar-DZ': 'arabe (dialecte algérien)', 'ar-MA': 'arabe (dialecte marocain / Darija)' };
+          const name = dialectCode ? dialectLabels[dialectCode] : arLang.name;
+          return { code: 'ar', name, confidence: arLang.score(clean), dialect: dialectCode };
         }
 
         if ('ai' in self && self.ai?.languageDetector) {
@@ -497,6 +532,7 @@
           recognition.stop();
           return;
         }
+        recognition.lang = arabicVariantSelect.value || 'fr-FR';
         try {
           recognition.start();
         } catch {
@@ -579,6 +615,35 @@
         };
         window.speechSynthesis.speak(utterance);
       }
+
+      const dialectWarning = document.getElementById('dialectWarning');
+      const DIALECT_LABELS = { 'ar-SA': 'arabe standard', 'ar-TN': 'tunisien', 'ar-DZ': 'algérien', 'ar-MA': 'marocain / Darija' };
+
+      function checkDialectSupport() {
+        const chosen = arabicVariantSelect.value;
+        if (chosen === 'ar-SA') {
+          dialectWarning.style.display = 'none';
+          return;
+        }
+        if (!SpeechRecognition) {
+          dialectWarning.style.display = 'none';
+          return;
+        }
+        const testRecognition = new SpeechRecognition();
+        let supported = true;
+        try {
+          testRecognition.lang = chosen;
+        } catch {
+          supported = false;
+        }
+        dialectWarning.style.display = 'block';
+        dialectWarning.textContent = supported
+          ? `Reconnaissance configurée pour l'arabe ${DIALECT_LABELS[chosen]}. Certains navigateurs/téléphones ne distinguent pas encore bien ce dialecte du reste de l'arabe : si l'écoute ne capte pas correctement, basculez sur "Arabe standard" ou dictez via le clavier vocal du téléphone, qui gère souvent mieux les dialectes locaux que le micro du navigateur.`
+          : `Ce navigateur ne semble pas reconnaître spécifiquement l'arabe ${DIALECT_LABELS[chosen]}. Utilisez de préférence le clavier vocal de votre téléphone (souvent plus performant sur les dialectes) puis laissez l'application détecter et traduire automatiquement le texte collé.`;
+      }
+
+      arabicVariantSelect.addEventListener('change', checkDialectSupport);
+      checkDialectSupport();
 
       speakBtn.addEventListener('click', speakTranslation);
       setupSpeech();
