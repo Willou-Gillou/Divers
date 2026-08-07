@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>PaceCoach v0.2 — Contrôle de vitesse de course</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>PaceCoach v0.3 — Contrôle de vitesse de course</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#161a22; --panel2:#1d2230; --accent:#3ddc97; --accent2:#ffb020;
@@ -24,6 +27,7 @@
   #err-banner{display:none;background:#3a2f0d;color:#ffe08a;padding:8px 14px;font-size:11px;
     border-bottom:1px solid #5a4a1a;line-height:1.4;}
   #err-banner.show{display:block;}
+  #build-tag{font-size:10px;color:#4a5266;text-align:center;padding:3px 0;background:#0d0f14;}
   .tabs{display:flex;gap:6px;padding:8px 10px;background:var(--panel);}
   .tab{flex:1;text-align:center;padding:10px 6px;border-radius:10px;background:var(--panel2);
     color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;user-select:none;border:1px solid transparent;
@@ -83,22 +87,23 @@
 <body>
 <noscript>
   <div style="padding:20px;background:#3a1d1d;color:#ffb3b3;font-family:sans-serif;">
-    JavaScript est désactivé ou n'a pas pu s'exécuter (aperçu de fichier au lieu d'un vrai onglet navigateur).
-    Ouvrez ce fichier directement dans Safari/Chrome (pas dans un aperçu Fichiers/Mail) pour que l'application fonctionne.
+    JavaScript est désactivé ou bloqué par le navigateur. Ouvrez cette page dans Safari/Chrome avec JavaScript activé.
   </div>
 </noscript>
 <div id="app">
   <header>
     <h1>🏃 PaceCoach</h1>
-    <span class="ver">v0.2</span>
+    <span class="ver">v0.3</span>
   </header>
+  <div id="build-tag"></div>
   <div id="noscript-banner">
-    ⚠️ Le script n'a pas pu s'initialiser correctement. Ouvrez ce fichier dans un vrai onglet Safari/Chrome
-    (et non dans un aperçu de Fichiers, Mail ou AirDrop) puis rechargez la page.
+    ⚠️ Le script ne s'est pas initialisé. Si vous êtes sur GitHub Pages : faites un rechargement forcé
+    (Ctrl+Maj+R ou Cmd+Maj+R), essayez en navigation privée, et vérifiez qu'un fichier <code>.nojekyll</code>
+    est présent à la racine du dépôt.
   </div>
   <div id="err-banner"></div>
 
-  <div class="tabs">
+  <div class="tabs" id="tabs">
     <div class="tab active" data-tab="hold">Tenue de vitesse</div>
     <div class="tab" data-tab="listen">Écoute de vitesse</div>
     <div class="tab" data-tab="run">Course</div>
@@ -110,8 +115,8 @@
       <div class="card">
         <h2>Unité</h2>
         <div class="unit-toggle">
-          <button type="button" id="unit-pace" class="active">min/km</button>
-          <button type="button" id="unit-kmh">km/h</button>
+          <button type="button" id="unit-pace" class="active" data-action="unit-hold-pace">min/km</button>
+          <button type="button" id="unit-kmh" data-action="unit-hold-kmh">km/h</button>
         </div>
       </div>
       <div class="card">
@@ -132,17 +137,17 @@
       <div class="card">
         <h2>Unité annoncée</h2>
         <div class="unit-toggle">
-          <button type="button" id="unit-pace-l" class="active">min/km</button>
-          <button type="button" id="unit-kmh-l">km/h</button>
+          <button type="button" id="unit-pace-l" class="active" data-action="unit-listen-pace">min/km</button>
+          <button type="button" id="unit-kmh-l" data-action="unit-listen-kmh">km/h</button>
         </div>
       </div>
       <div class="card">
         <h2>Fréquence des annonces</h2>
-        <div class="freq-grid">
-          <button type="button" data-f="10" class="freq active">10 s</button>
-          <button type="button" data-f="15" class="freq">15 s</button>
-          <button type="button" data-f="20" class="freq">20 s</button>
-          <button type="button" data-f="30" class="freq">30 s</button>
+        <div class="freq-grid" id="freq-grid">
+          <button type="button" data-f="10" class="freq active" data-action="freq">10 s</button>
+          <button type="button" data-f="15" class="freq" data-action="freq">15 s</button>
+          <button type="button" data-f="20" class="freq" data-action="freq">20 s</button>
+          <button type="button" data-f="30" class="freq" data-action="freq">30 s</button>
         </div>
         <p class="help">L'allure ou la vitesse courante est annoncée vocalement à l'intervalle choisi.</p>
       </div>
@@ -171,24 +176,6 @@
   </main>
 
   <footer>
-    <button type="button" class="btn btn-screen" id="btn-black" title="Écran noir">⏻</button>
-    <button type="button" class="btn btn-start" id="btn-start">Démarrer</button>
-    <button type="button" class="btn btn-stop" id="btn-stop" style="display:none">Arrêter</button>
-  </footer>
-</div>
-
-<div id="blackout">
-  <div id="blackout-info">Écran éteint — appuyer pour revenir</div>
-  <div class="pulse" id="blackout-status">·</div>
-</div>
-<div class="toast" id="toast"></div>
-
-<script>
-// Marker flipped to true only once init() completes without a fatal error.
-window.__pacecoach_ready = false;
-
-window.addEventListener('error', function(e){
-  try{
-    var b = document.getElementById('err-banner');
-    if(b){
-      b.classList.ad
+    <button type="button" class="btn btn-screen" id="btn-black" data-action="blackout" title="Écran noir">⏻</button>
+    <button type="button" class="btn btn-start" id="btn-start" data-action="start">Démarrer</button>
+    <button type="button" class="btn btn-stop" id="btn-sto
