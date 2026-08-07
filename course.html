@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>PaceCoach v0.3 — Contrôle de vitesse de course</title>
+<title>PaceCoach v0.4 — Contrôle de vitesse de course</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#161a22; --panel2:#1d2230; --accent:#3ddc97; --accent2:#ffb020;
@@ -21,9 +21,20 @@
     background:var(--panel);border-bottom:1px solid #232838;}
   header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.3px;}
   header .ver{font-size:11px;color:var(--muted);}
-  #noscript-banner{display:none;background:#3a1d1d;color:#ffb3b3;padding:10px 14px;font-size:12px;
-    border-bottom:1px solid #5a2a2a;line-height:1.5;}
-  #noscript-banner.show{display:block;}
+
+  /* Bandeau visible PAR DEFAUT en CSS pur (pas de "display:none" initial).
+     Le script, dès sa toute première ligne exécutée, le masque via JS.
+     S'il reste visible => la preuve certaine que le JS n'a jamais tourné,
+     quelle qu'en soit la cause (réglage, Lockdown Mode, bloqueur de contenu). */
+  #js-guard{
+    display:block;background:#3a1d1d;color:#ffd0d0;padding:14px 16px;font-size:13px;
+    line-height:1.6;border-bottom:2px solid #ff4d4f;
+  }
+  #js-guard b{color:#fff;}
+  #js-guard ol{margin:8px 0 0;padding-left:20px;}
+  #js-guard li{margin-bottom:4px;}
+  html.js-ok #js-guard{display:none;}
+
   #err-banner{display:none;background:#3a2f0d;color:#ffe08a;padding:8px 14px;font-size:11px;
     border-bottom:1px solid #5a4a1a;line-height:1.4;}
   #err-banner.show{display:block;}
@@ -85,22 +96,26 @@
 </style>
 </head>
 <body>
-<noscript>
-  <div style="padding:20px;background:#3a1d1d;color:#ffb3b3;font-family:sans-serif;">
-    JavaScript est désactivé ou bloqué par le navigateur. Ouvrez cette page dans Safari/Chrome avec JavaScript activé.
-  </div>
-</noscript>
+
+<!-- Ce bandeau est visible par défaut (CSS pur). La première instruction du
+     script le masque. S'il reste affiché, le JavaScript n'a jamais démarré. -->
+<div id="js-guard">
+  <b>⚠️ JavaScript ne s'exécute pas sur cette page.</b>
+  Sur iPhone, vérifiez dans l'ordre :
+  <ol>
+    <li>Réglages → Apps → Safari → Avancé → activez <b>JavaScript</b>.</li>
+    <li>Si le <b>Mode Isolement</b> (Lockdown Mode) est activé : ouvrez le menu "aA" dans la barre d'adresse Safari → Réglages du site → désactivez le Mode Isolement pour ce site.</li>
+    <li>Si vous utilisez un bloqueur de contenu (AdGuard, 1Blocker, Wipr...) : désactivez-le temporairement pour ce site.</li>
+    <li>Essayez en navigation privée pour écarter toute extension.</li>
+  </ol>
+</div>
+
 <div id="app">
   <header>
     <h1>🏃 PaceCoach</h1>
-    <span class="ver">v0.3</span>
+    <span class="ver">v0.4</span>
   </header>
   <div id="build-tag"></div>
-  <div id="noscript-banner">
-    ⚠️ Le script ne s'est pas initialisé. Si vous êtes sur GitHub Pages : faites un rechargement forcé
-    (Ctrl+Maj+R ou Cmd+Maj+R), essayez en navigation privée, et vérifiez qu'un fichier <code>.nojekyll</code>
-    est présent à la racine du dépôt.
-  </div>
   <div id="err-banner"></div>
 
   <div class="tabs" id="tabs">
@@ -163,19 +178,4 @@
       </div>
       <div class="card">
         <div class="metrics">
-          <div><div class="v" id="m-dist">0.00</div><div class="l">km</div></div>
-          <div><div class="v" id="m-time">00:00</div><div class="l">durée</div></div>
-          <div><div class="v" id="m-avg">--:--</div><div class="l">allure moy.</div></div>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Trajet</h2>
-        <canvas id="map"></canvas>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <button type="button" class="btn btn-screen" id="btn-black" data-action="blackout" title="Écran noir">⏻</button>
-    <button type="button" class="btn btn-start" id="btn-start" data-action="start">Démarrer</button>
-    <button type="button" class="btn btn-stop" id="btn-sto
+          <div><div class="v" id="m-dist">0.00</
