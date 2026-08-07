@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>PaceCoach v0.8</title>
+<title>PaceCoach v0.9</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#161a22; --panel2:#1d2230; --accent:#3ddc97; --accent2:#ffb020;
@@ -63,7 +63,8 @@
   .metrics div{background:#0d0f14;border-radius:10px;padding:8px 4px;}
   .metrics .v{font-size:17px;font-weight:700;}
   .metrics .l{font-size:10px;color:var(--muted);text-transform:uppercase;}
-  #map{width:100%;height:220px;border-radius:12px;background:#0d0f14;display:block;}
+  #map{width:100%;height:220px;border-radius:12px;background:#0d0f14;display:block;
+    border:1px solid #2a2f3d;}
   .gps-flag{font-size:11px;color:var(--muted);margin-top:6px;text-align:center;}
   .gps-flag.weak{color:var(--accent2);}
   footer{position:fixed;bottom:0;left:0;right:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
@@ -87,7 +88,7 @@
 <body>
 
 <div id="diag">
-<b>DIAGNOSTIC PACECOACH v0.8</b>
+<b>DIAGNOSTIC PACECOACH v0.9</b>
 Etape A (script minimal)   : <span id="diag-a">NON EXECUTEE</span>
 Etape B (script principal) : <span id="diag-c">NON EXECUTEE</span>
 Erreur capturee            : <span id="diag-err">aucune</span>
@@ -104,7 +105,7 @@ try{
 <div id="app">
   <header>
     <h1>PaceCoach</h1>
-    <span class="ver">v0.8</span>
+    <span class="ver">v0.9</span>
   </header>
   <div id="build-tag"></div>
   <div id="err-banner"></div>
@@ -231,6 +232,7 @@ try {
   state.totalDistanceM = 0;
   state.speedBuffer = [];
   state.emaSpeed = null;
+  state.lastEmaTime = null;
   state.lastCoord = null;
   state.path = [];
   state.projOrigin = null;
@@ -249,7 +251,9 @@ try {
   var WEAK_ACCEPTABLE_ACCURACY = 60;
   var HYSTERESIS_SEC = 15;
   var DEBOUNCE_SAMPLES = 3;
-  var EMA_ALPHA = 0.35;
+  var MEDIAN_WINDOW = 7;
+  var MAX_ACCEL = 3.2;
+  var WINDOW_MS = 3000;
 
   function byId(id) {
     return document.getElementById(id);
@@ -287,6 +291,32 @@ try {
     return 0;
   }
 
+  function paceSpeechWords(secPerKm) {
+    if (!isFinite(secPerKm) || secPerKm <= 0) { return "en attente de signal"; }
+    var m = Math.floor(secPerKm / 60);
+    var s = Math.round(secPerKm % 60);
+    if (s === 60) { s = 0; m = m + 1; }
+    var minWord = (m === 1) ? "minute" : "minutes";
+    var secWord = (s === 1) ? "seconde" : "secondes";
+    if (m === 0) {
+      return s + " " + secWord + " par kilom\u00e8tre";
+    }
+    if (s === 0) {
+      return m + " " + minWord + " par kilom\u00e8tre";
+    }
+    return m + " " + minWord + " " + s + " " + secWord + " par kilom\u00e8tre";
+  }
+
+  function kmhSpeechWords(kmh) {
+    var whole = Math.floor(kmh);
+    var tenth = Math.round((kmh - whole) * 10);
+    if (tenth === 10) { tenth = 0; whole = whole + 1; }
+    if (tenth === 0) {
+      return whole + " kilom\u00e8tres heure";
+    }
+    return whole + " virgule " + tenth + " kilom\u00e8tres heure";
+  }
+
   function showToast(msg, ms) {
     if (!ms) { ms = 1800; }
     var t = byId("toast");
@@ -317,6 +347,15 @@ try {
     var mid = Math.floor(s.length / 2);
     if (s.length % 2) { return s[mid]; }
     return (s[mid - 1] + s[mid]) / 2;
+  }
+
+  function findPastPoint(nowT, deltaMs) {
+    var i = state.path.length - 1;
+    while (i >= 0) {
+      if (nowT - state.path[i].t >= deltaMs) { return state.path[i]; }
+      i = i - 1;
+    }
+    return null;
   }
 
   var audioCtx = null;
@@ -401,7 +440,12 @@ try {
     if (pl) { pl.style.display = (which === "listen") ? "block" : "none"; }
     if (pr) { pr.style.display = (which === "run") ? "block" : "none"; }
     if (which === "hold" || which === "listen") { state.mode = which; }
-    if (which === "run") { setTimeout(resizeCanvas, 30); setTimeout(drawPath, 60); }
+    if (which === "run") {
+      resizeCanvas();
+      drawPath();
+      setTimeout(function () { resizeCanvas(); drawPath(); }, 60);
+      setTimeout(function () { resizeCanvas(); drawPath(); }, 250);
+    }
   }
 
   function readTargetFromInputs() {
@@ -443,11 +487,34 @@ try {
     return { x: x, y: -y };
   }
 
+  function drawGrid(rect, ctx) {
+    ctx.strokeStyle = "#1a1e28";
+    ctx.lineWidth = 1;
+    var step = 30;
+    var x = step;
+    while (x < rect.width) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, rect.height);
+      ctx.stroke();
+      x = x + step;
+    }
+    var y = step;
+    while (y < rect.height) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(rect.width, y);
+      ctx.stroke();
+      y = y + step;
+    }
+  }
+
   function drawPlaceholder(rect, ctx, text) {
     ctx.fillStyle = "#0d0f14";
     ctx.fillRect(0, 0, rect.width, rect.height);
-    ctx.fillStyle = "#4a5266";
-    ctx.font = "13px -apple-system, Arial, sans-serif";
+    drawGrid(rect, ctx);
+    ctx.fillStyle = "#8b93a7";
+    ctx.font = "bold 13px -apple-system, Arial, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(text, rect.width / 2, rect.height / 2);
@@ -457,7 +524,9 @@ try {
     try {
       if (!canvas) { return; }
       var ctx = canvas.getContext("2d");
+      if (!ctx) { return; }
       var rect = canvas.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) { return; }
 
       if (state.path.length === 0) {
         var msg0 = "En attente de signal GPS...";
@@ -470,6 +539,7 @@ try {
       ctx.clearRect(0, 0, rect.width, rect.height);
       ctx.fillStyle = "#0d0f14";
       ctx.fillRect(0, 0, rect.width, rect.height);
+      drawGrid(rect, ctx);
 
       var pts = [];
       var i = 0;
@@ -564,38 +634,67 @@ try {
         updateGpsFlag("Position fixee - precision: " + Math.round(accuracy) + " m", "");
       }
 
-      var instSpeed = null;
-      if (typeof speedRaw === "number" && speedRaw !== null && speedRaw >= 0) {
-        instSpeed = speedRaw;
-      }
-      if (instSpeed === null && state.lastCoord) {
-        var dt = (t - state.lastCoord.t) / 1000;
-        if (dt > 0.2) {
-          var d = haversine(state.lastCoord.lat, state.lastCoord.lon, lat, lon);
-          instSpeed = d / dt;
-        }
-      }
       state.lastCoord = { lat: lat, lon: lon, t: t };
 
       if (state.path.length > 0) {
-        var prev = state.path[state.path.length - 1];
-        var dd = haversine(prev.lat, prev.lon, lat, lon);
-        if (dd < 100) { state.totalDistanceM = state.totalDistanceM + dd; }
+        var prevPt = state.path[state.path.length - 1];
+        var ddTotal = haversine(prevPt.lat, prevPt.lon, lat, lon);
+        if (ddTotal < 100) { state.totalDistanceM = state.totalDistanceM + ddTotal; }
       }
+
+      var instSpeed = null;
+
+      if (typeof speedRaw === "number" && speedRaw !== null && speedRaw >= 0) {
+        instSpeed = speedRaw;
+      } else {
+        var refPoint = findPastPoint(t, WINDOW_MS);
+        if (refPoint) {
+          var distW = haversine(refPoint.lat, refPoint.lon, lat, lon);
+          var dtW = (t - refPoint.t) / 1000;
+          if (dtW > 0.5) { instSpeed = distW / dtW; }
+        } else if (state.path.length > 0) {
+          var prevSimple = state.path[state.path.length - 1];
+          var dtSimple = (t - prevSimple.t) / 1000;
+          if (dtSimple > 0.2) {
+            var dSimple = haversine(prevSimple.lat, prevSimple.lon, lat, lon);
+            instSpeed = dSimple / dtSimple;
+          }
+        }
+      }
+
       state.path.push({ lat: lat, lon: lon, t: t });
       if (state.path.length > 2000) { state.path.shift(); }
 
       if (instSpeed === null) { return; }
       if (instSpeed > MAX_RUN_SPEED || instSpeed < 0) { return; }
 
+      if (state.emaSpeed !== null) {
+        var dtAccel = 1;
+        if (state.lastEmaTime !== null) {
+          dtAccel = Math.max((t - state.lastEmaTime) / 1000, 0.5);
+        }
+        var maxDelta = MAX_ACCEL * dtAccel;
+        var delta = instSpeed - state.emaSpeed;
+        if (delta > maxDelta) { instSpeed = state.emaSpeed + maxDelta; }
+        else if (delta < (0 - maxDelta)) { instSpeed = state.emaSpeed - maxDelta; }
+      }
+
       state.speedBuffer.push(instSpeed);
-      if (state.speedBuffer.length > 5) { state.speedBuffer.shift(); }
+      if (state.speedBuffer.length > MEDIAN_WINDOW) { state.speedBuffer.shift(); }
       var med = median(state.speedBuffer);
+
+      var alpha = 0.18;
+      if (accuracy <= 12) { alpha = 0.38; }
+      else if (accuracy <= 20) { alpha = 0.28; }
+      else if (accuracy <= 30) { alpha = 0.20; }
+      else { alpha = 0.12; }
+
       if (state.emaSpeed === null) {
         state.emaSpeed = med;
       } else {
-        state.emaSpeed = EMA_ALPHA * med + (1 - EMA_ALPHA) * state.emaSpeed;
+        state.emaSpeed = alpha * med + (1 - alpha) * state.emaSpeed;
       }
+      state.lastEmaTime = t;
     } catch (e) {}
   }
 
@@ -684,14 +783,10 @@ try {
       var msg;
       if (state.unitListen === "pace") {
         var p = speedToPace(currentSpeed);
-        if (isFinite(p)) {
-          msg = fmtPace(p) + " minute par kilom\u00e8tre";
-        } else {
-          msg = "en attente de signal";
-        }
+        msg = paceSpeechWords(p);
       } else {
         var kmh = currentSpeed * 3.6;
-        msg = kmh.toFixed(1).replace(".", " virgule ") + " kilom\u00e8tres heure";
+        msg = kmhSpeechWords(kmh);
       }
       speak(msg);
       var label;
@@ -705,6 +800,7 @@ try {
   }
 
   var loopHandle = null;
+  var canvasHeartbeat = null;
 
   function tick() {
     try {
@@ -764,6 +860,7 @@ try {
       state.projOrigin = null;
       state.speedBuffer = [];
       state.emaSpeed = null;
+      state.lastEmaTime = null;
       state.lastCoord = null;
       state.currentStatus = "idle";
       state.stateCandidate = null;
@@ -773,8 +870,6 @@ try {
       state.gpsState = "searching";
 
       selectTab("run");
-      setTimeout(resizeCanvas, 50);
-      setTimeout(drawPath, 80);
 
       var bStart = byId("btn-start");
       var bStop = byId("btn-stop");
@@ -917,8 +1012,19 @@ try {
     }, false);
   }
 
-  window.addEventListener("load", resizeCanvas);
+  window.addEventListener("load", function () {
+    resizeCanvas();
+    drawPath();
+  });
   resizeCanvas();
+
+  canvasHeartbeat = setInterval(function () {
+    var pr = byId("panel-run");
+    if (pr && pr.style.display === "block") {
+      resizeCanvas();
+      drawPath();
+    }
+  }, 700);
 
   window.PC_STEP_C = "OK";
   var diagC = document.getElementById("diag-c");
