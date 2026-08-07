@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>PaceCoach v1.1</title>
+<title>PaceCoach v1.2</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root{
@@ -35,7 +35,7 @@
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
   .row + .row{margin-top:10px;}
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px;}
-  input[type=number]{
+  input[type=number], select{
     background:#0d0f14;border:1px solid #2a2f3d;color:var(--text);border-radius:8px;
     padding:9px 10px;font-size:15px;width:100%;
   }
@@ -47,9 +47,13 @@
   .freq-grid button{padding:9px 4px;border-radius:8px;border:1px solid #2a2f3d;background:#0d0f14;
     color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;}
   .freq-grid button.active{background:rgba(61,220,151,.15);color:var(--accent);border-color:var(--accent);}
-  .big-display{text-align:center;padding:18px 6px;}
+  .big-display{text-align:center;padding:18px 6px;position:relative;}
+  .big-display .pace-row{display:flex;align-items:center;justify-content:center;gap:10px;}
   .big-display .pace{font-size:56px;font-weight:800;letter-spacing:1px;line-height:1;}
   .big-display .sub{font-size:14px;color:var(--muted);margin-top:6px;}
+  #btn-set{width:44px;height:44px;border-radius:50%;border:2px solid var(--accent);background:rgba(61,220,151,.12);
+    color:var(--accent);font-size:11px;font-weight:800;cursor:pointer;display:inline-flex;
+    align-items:center;justify-content:center;flex:0 0 44px;}
   .status-banner{margin-top:12px;padding:12px;border-radius:12px;text-align:center;font-weight:700;
     font-size:16px;letter-spacing:.3px;transition:background .3s,color .3s;background:#0d0f14;color:var(--muted);}
   .status-banner.ok{background:rgba(61,220,151,.15);color:var(--ok);}
@@ -62,13 +66,27 @@
   .gps-flag{font-size:11px;color:var(--muted);margin-top:6px;text-align:center;}
   .gps-flag.weak{color:var(--accent2);}
 
-  .mode-switch{display:flex;gap:8px;}
-  .mode-switch button{flex:1;padding:12px 6px;border-radius:12px;border:1px solid #2a2f3d;background:#0d0f14;
-    color:var(--muted);font-size:14px;font-weight:700;cursor:pointer;}
+  .mode-switch{display:flex;gap:6px;}
+  .mode-switch button{flex:1;padding:10px 4px;border-radius:12px;border:1px solid #2a2f3d;background:#0d0f14;
+    color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;}
   .mode-switch button.active{background:rgba(61,220,151,.15);color:var(--accent);border-color:var(--accent);}
 
   #leafletmap{width:100%;height:300px;border-radius:12px;border:1px solid #2a2f3d;background:#0d0f14;}
   .leaflet-container{background:#0d0f14;}
+
+  #history-view-panel{display:none;background:#0d0f14;border-radius:10px;padding:10px 12px;margin-bottom:10px;
+    border:1px solid #2a3550;}
+  #history-view-panel .hv-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  #history-view-title{font-size:13px;font-weight:700;color:var(--text);}
+  #history-view-meta{font-size:11px;color:var(--muted);margin-top:3px;}
+  #history-view-panel button{background:var(--panel2);color:var(--muted);border:none;border-radius:8px;
+    padding:6px 10px;font-size:11px;cursor:pointer;white-space:nowrap;}
+
+  .history-item{background:#0d0f14;border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;
+    border:1px solid #2a2f3d;}
+  .history-item:last-child{margin-bottom:0;}
+  .hi-name{font-size:13px;font-weight:600;color:var(--text);}
+  .hi-meta{font-size:11px;color:var(--muted);margin-top:3px;}
 
   footer{position:fixed;bottom:0;left:0;right:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
     background:linear-gradient(180deg,transparent,var(--bg) 30%);display:flex;gap:10px;z-index:50;}
@@ -91,7 +109,7 @@
 <body>
 
 <div id="diag">
-<b>DIAGNOSTIC PACECOACH v1.1</b>
+<b>DIAGNOSTIC PACECOACH v1.2</b>
 Etape A (script minimal)   : <span id="diag-a">NON EXECUTEE</span>
 Etape B (script principal) : <span id="diag-c">NON EXECUTEE</span>
 Erreur capturee            : <span id="diag-err">aucune</span>
@@ -110,7 +128,7 @@ try{
 <div id="app">
   <header>
     <h1>PaceCoach</h1>
-    <span class="ver">v1.1</span>
+    <span class="ver">v1.2</span>
   </header>
   <div id="build-tag"></div>
   <div id="err-banner"></div>
@@ -118,7 +136,10 @@ try{
   <main>
     <section id="panel-run" class="panel">
       <div class="card big-display">
-        <div class="pace" id="live-pace">--:--</div>
+        <div class="pace-row">
+          <div class="pace" id="live-pace">--:--</div>
+          <button type="button" id="btn-set" data-action="set-target" title="Definir l'allure cible sur l'allure actuelle">SET</button>
+        </div>
         <div class="sub" id="live-sub">min/km - en attente de GPS</div>
         <div class="status-banner" id="status-banner">Pret</div>
         <div class="gps-flag" id="gps-flag"></div>
@@ -137,6 +158,7 @@ try{
         <div class="mode-switch">
           <button type="button" id="mode-hold" class="active" data-action="mode-hold">Tenue de vitesse</button>
           <button type="button" id="mode-listen" data-action="mode-listen">Ecoute de vitesse</button>
+          <button type="button" id="mode-ghost" data-action="mode-ghost">Challenge fantome</button>
         </div>
       </div>
 
@@ -153,7 +175,7 @@ try{
         <div class="row" id="hold-kmh-row" style="display:none;margin-top:10px">
           <div style="flex:1"><label>Vitesse (km/h)</label><input type="number" id="hold-kmh-val" min="3" max="25" step="0.1" value="11.0"></div>
         </div>
-        <p class="help">Tolerance fixe : plus ou moins 15 secondes par km. En dessous : alerte "trop lent" et bip toutes les 5 secondes. Au-dessus : alerte "trop vite" et bip toutes les 5 secondes. Dans la fenetre : "allure stabilisee". Modifiable a tout moment, meme pendant la course.</p>
+        <p class="help">Tolerance fixe : plus ou moins 15 secondes par km. Le bouton SET ci-dessus permet de fixer instantanement l'allure cible sur votre allure actuelle. Modifiable a tout moment, meme pendant la course.</p>
       </div>
 
       <div class="card" id="settings-listen" style="display:none">
@@ -169,12 +191,33 @@ try{
           <button type="button" data-f="20" class="freq" data-action="freq">20 s</button>
           <button type="button" data-f="30" class="freq" data-action="freq">30 s</button>
         </div>
-        <p class="help">L'allure ou la vitesse courante est annoncee vocalement a l'intervalle choisi. Modifiable a tout moment, meme pendant la course.</p>
+        <p class="help">L'allure ou la vitesse courante est annoncee vocalement a l'intervalle choisi.</p>
+      </div>
+
+      <div class="card" id="settings-ghost" style="display:none">
+        <h2>Reglages - Challenge fantome</h2>
+        <p class="help" id="ghost-none-msg" style="display:none">Aucune course enregistree pour le moment. Terminez une course dans un autre mode pour pouvoir la choisir ensuite comme fantome.</p>
+        <select id="ghost-select"></select>
+        <p class="help">Votre position et celle du fantome (course passee selectionnee) s'affichent superposees sur la carte. L'ecart de temps ("en avance de..." / "en retard de...") est annonce vocalement toutes les 30 secondes.</p>
       </div>
 
       <div class="card">
         <h2>Trajet</h2>
+        <div id="history-view-panel">
+          <div class="hv-row">
+            <div>
+              <div id="history-view-title"></div>
+              <div id="history-view-meta"></div>
+            </div>
+            <button type="button" data-action="close-history-view">Fermer</button>
+          </div>
+        </div>
         <div id="leafletmap"></div>
+      </div>
+
+      <div class="card">
+        <h2>Historique des courses</h2>
+        <div id="history-list"></div>
       </div>
     </section>
   </main>
@@ -245,6 +288,8 @@ try {
   state.stateCandidateCount = 0;
   state.gpsState = "idle";
   state.mapReady = false;
+  state.ghostRecord = null;
+  state.lastGhostAnnounceElapsed = -9999;
 
   var MAX_RUN_SPEED = 8.5;
   var MIN_ACCEPTABLE_ACCURACY = 30;
@@ -254,6 +299,10 @@ try {
   var MEDIAN_WINDOW = 7;
   var MAX_ACCEL = 3.2;
   var WINDOW_MS = 3000;
+  var GHOST_ANNOUNCE_SEC = 30;
+  var HISTORY_KEY = "pacecoach_history";
+  var MIN_SAVE_DISTANCE_M = 50;
+  var MAX_HISTORY = 30;
 
   function byId(id) {
     return document.getElementById(id);
@@ -279,6 +328,15 @@ try {
     var out = pad2(m) + ":" + pad2(s);
     if (h > 0) { out = pad2(h) + ":" + out; }
     return out;
+  }
+
+  function fmtDateTime(d) {
+    var day = pad2(d.getDate());
+    var month = pad2(d.getMonth() + 1);
+    var year = d.getFullYear();
+    var hh = pad2(d.getHours());
+    var mm = pad2(d.getMinutes());
+    return day + "/" + month + "/" + year + " a " + hh + "h" + mm;
   }
 
   function speedToPace(v) {
@@ -315,6 +373,22 @@ try {
       return whole + " kilom\u00e8tres heure";
     }
     return whole + " virgule " + tenth + " kilom\u00e8tres heure";
+  }
+
+  function durationSpeechWords(sec) {
+    var s = Math.round(Math.abs(sec));
+    var m = Math.floor(s / 60);
+    var rs = s % 60;
+    if (m === 0) {
+      var secW = (rs === 1) ? "seconde" : "secondes";
+      return rs + " " + secW;
+    }
+    var minW = (m === 1) ? "minute" : "minutes";
+    if (rs === 0) {
+      return m + " " + minW;
+    }
+    var secW2 = (rs === 1) ? "seconde" : "secondes";
+    return m + " " + minW + " " + rs + " " + secW2;
   }
 
   function showToast(msg, ms) {
@@ -425,12 +499,22 @@ try {
     state.mode = which;
     var bHold = byId("mode-hold");
     var bListen = byId("mode-listen");
+    var bGhost = byId("mode-ghost");
     var sHold = byId("settings-hold");
     var sListen = byId("settings-listen");
+    var sGhost = byId("settings-ghost");
+    var btnSet = byId("btn-set");
     if (bHold) { bHold.className = (which === "hold") ? "active" : ""; }
     if (bListen) { bListen.className = (which === "listen") ? "active" : ""; }
+    if (bGhost) { bGhost.className = (which === "ghost") ? "active" : ""; }
     if (sHold) { sHold.style.display = (which === "hold") ? "block" : "none"; }
     if (sListen) { sListen.style.display = (which === "listen") ? "block" : "none"; }
+    if (sGhost) { sGhost.style.display = (which === "ghost") ? "block" : "none"; }
+    if (btnSet) { btnSet.style.display = (which === "hold") ? "inline-flex" : "none"; }
+    if (which === "ghost") {
+      renderGhostSelect();
+      if (lGhostMarker) { try { lmap.removeLayer(lGhostMarker); } catch (e2) {} lGhostMarker = null; }
+    }
   }
 
   function readTargetFromInputs() {
@@ -444,9 +528,209 @@ try {
     }
   }
 
+  function doSetTargetToCurrent() {
+    var v = state.emaSpeed;
+    if (v === null) {
+      showToast("Pas encore de vitesse mesuree");
+      return;
+    }
+    if (state.unitHold === "pace") {
+      var p = speedToPace(v);
+      if (!isFinite(p)) { showToast("Vitesse insuffisante pour definir une allure"); return; }
+      var m = Math.floor(p / 60);
+      var s = Math.round(p % 60);
+      if (s === 60) { s = 0; m = m + 1; }
+      byId("hold-min").value = m;
+      byId("hold-sec").value = s;
+      showToast("Allure cible mise a jour: " + fmtPace(p) + " /km");
+    } else {
+      var kmh = v * 3.6;
+      byId("hold-kmh-val").value = kmh.toFixed(1);
+      showToast("Vitesse cible mise a jour: " + kmh.toFixed(1) + " km/h");
+    }
+    readTargetFromInputs();
+    state.stateCandidate = null;
+    state.stateCandidateCount = 0;
+  }
+
+  function loadHistory() {
+    try {
+      var raw = window.localStorage.getItem(HISTORY_KEY);
+      if (!raw) { return []; }
+      var parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) { return []; }
+      return parsed;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveHistory(arr) {
+    try {
+      window.localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+    } catch (e) {}
+  }
+
+  function saveCurrentRunToHistory() {
+    try {
+      if (!state.startTime) { return; }
+      if (state.path.length < 2) { return; }
+      if (state.totalDistanceM < MIN_SAVE_DISTANCE_M) { return; }
+      var startDate = new Date(state.startTime);
+      var record = {
+        id: state.startTime,
+        name: "Trace du " + fmtDateTime(startDate),
+        dateISO: startDate.toISOString(),
+        distanceM: state.totalDistanceM,
+        durationSec: elapsedSeconds(),
+        path: state.path.slice()
+      };
+      var hist = loadHistory();
+      hist.unshift(record);
+      if (hist.length > MAX_HISTORY) { hist = hist.slice(0, MAX_HISTORY); }
+      saveHistory(hist);
+      renderHistoryList();
+      showToast("Course enregistree dans l historique");
+    } catch (e) {}
+  }
+
+  function renderHistoryList() {
+    try {
+      var list = byId("history-list");
+      if (!list) { return; }
+      var hist = loadHistory();
+      if (hist.length === 0) {
+        list.innerHTML = "";
+        var p = document.createElement("p");
+        p.className = "help";
+        p.textContent = "Aucune course enregistree pour le moment. Terminez une course pour la voir apparaitre ici.";
+        list.appendChild(p);
+        return;
+      }
+      list.innerHTML = "";
+      var i = 0;
+      while (i < hist.length) {
+        var rec = hist[i];
+        var item = document.createElement("div");
+        item.className = "history-item";
+        item.setAttribute("data-action", "view-history");
+        item.setAttribute("data-id", String(rec.id));
+        var nameEl = document.createElement("div");
+        nameEl.className = "hi-name";
+        nameEl.textContent = rec.name;
+        var metaEl = document.createElement("div");
+        metaEl.className = "hi-meta";
+        var distKm = (rec.distanceM / 1000).toFixed(2);
+        metaEl.textContent = distKm + " km - " + fmtTime(rec.durationSec);
+        item.appendChild(nameEl);
+        item.appendChild(metaEl);
+        list.appendChild(item);
+        i = i + 1;
+      }
+    } catch (e) {}
+  }
+
+  function renderGhostSelect() {
+    try {
+      var sel = byId("ghost-select");
+      var msgNone = byId("ghost-none-msg");
+      if (!sel) { return; }
+      var hist = loadHistory();
+      sel.innerHTML = "";
+      if (hist.length === 0) {
+        if (msgNone) { msgNone.style.display = "block"; }
+        sel.style.display = "none";
+        return;
+      }
+      if (msgNone) { msgNone.style.display = "none"; }
+      sel.style.display = "block";
+      var optDefault = document.createElement("option");
+      optDefault.value = "";
+      optDefault.textContent = "Choisir une course fantome...";
+      sel.appendChild(optDefault);
+      var i = 0;
+      while (i < hist.length) {
+        var rec = hist[i];
+        var opt = document.createElement("option");
+        opt.value = String(rec.id);
+        var distKm = (rec.distanceM / 1000).toFixed(2);
+        opt.textContent = rec.name + " (" + distKm + " km)";
+        sel.appendChild(opt);
+        i = i + 1;
+      }
+    } catch (e) {}
+  }
+
+  function buildGhostProfile(record) {
+    var path = record.path;
+    if (!path || path.length < 2) { return null; }
+    var cumDist = [0];
+    var cumTime = [0];
+    var startT = path[0].t;
+    var i = 1;
+    var acc = 0;
+    while (i < path.length) {
+      var d = haversine(path[i - 1].lat, path[i - 1].lon, path[i].lat, path[i].lon);
+      acc = acc + d;
+      cumDist.push(acc);
+      cumTime.push((path[i].t - startT) / 1000);
+      i = i + 1;
+    }
+    return { path: path, cumDist: cumDist, cumTime: cumTime };
+  }
+
+  function interpAtDistance(cumDist, arr, d) {
+    var n = cumDist.length;
+    if (n === 0) { return null; }
+    if (d <= cumDist[0]) { return arr[0]; }
+    if (d >= cumDist[n - 1]) { return arr[n - 1]; }
+    var i = 0;
+    while (i < n - 1 && cumDist[i + 1] < d) { i = i + 1; }
+    var d0 = cumDist[i];
+    var d1 = cumDist[i + 1];
+    var v0 = arr[i];
+    var v1 = arr[i + 1];
+    if (d1 === d0) { return v0; }
+    var frac = (d - d0) / (d1 - d0);
+    return v0 + (v1 - v0) * frac;
+  }
+
+  function ghostLatLonAtDistance(profile, d) {
+    var cumDist = profile.cumDist;
+    var path = profile.path;
+    var n = cumDist.length;
+    if (d <= cumDist[0]) { return { lat: path[0].lat, lon: path[0].lon }; }
+    if (d >= cumDist[n - 1]) { return { lat: path[n - 1].lat, lon: path[n - 1].lon }; }
+    var i = 0;
+    while (i < n - 1 && cumDist[i + 1] < d) { i = i + 1; }
+    var d0 = cumDist[i];
+    var d1 = cumDist[i + 1];
+    var frac = (d1 === d0) ? 0 : (d - d0) / (d1 - d0);
+    var lat = path[i].lat + (path[i + 1].lat - path[i].lat) * frac;
+    var lon = path[i].lon + (path[i + 1].lon - path[i].lon) * frac;
+    return { lat: lat, lon: lon };
+  }
+
+  function loadGhostByIdValue(idVal) {
+    if (!idVal) { state.ghostRecord = null; return; }
+    var hist = loadHistory();
+    var i = 0;
+    while (i < hist.length) {
+      if (String(hist[i].id) === String(idVal)) {
+        state.ghostRecord = buildGhostProfile(hist[i]);
+        showToast("Fantome charge: " + hist[i].name);
+        return;
+      }
+      i = i + 1;
+    }
+    state.ghostRecord = null;
+  }
+
   var lmap = null;
   var lmarker = null;
   var lpolyline = null;
+  var lGhostMarker = null;
+  var lHistoryPolyline = null;
   var lHasCentered = false;
 
   function initLeafletMap() {
@@ -492,9 +776,68 @@ try {
       var latLng = [lat, lon];
       if (lmarker) { lmarker.setLatLng(latLng); }
       if (lpolyline) { lpolyline.addLatLng(latLng); }
+
+      if (state.mode === "ghost" && state.ghostRecord) {
+        var g = ghostLatLonAtDistance(state.ghostRecord, state.totalDistanceM);
+        if (!lGhostMarker) {
+          lGhostMarker = L.circleMarker([g.lat, g.lon], {
+            radius: 8,
+            color: "#8b93a7",
+            weight: 2,
+            fillColor: "#8b93a7",
+            fillOpacity: 0.85
+          }).addTo(lmap);
+        } else {
+          lGhostMarker.setLatLng([g.lat, g.lon]);
+        }
+      }
+
       var zoomToUse = lHasCentered ? lmap.getZoom() : 17;
       lmap.setView(latLng, zoomToUse);
       lHasCentered = true;
+    } catch (e) {}
+  }
+
+  function viewHistoryRun(idVal) {
+    try {
+      var hist = loadHistory();
+      var rec = null;
+      var i = 0;
+      while (i < hist.length) {
+        if (String(hist[i].id) === String(idVal)) { rec = hist[i]; break; }
+        i = i + 1;
+      }
+      if (!rec || !lmap) { return; }
+      if (lHistoryPolyline) { try { lmap.removeLayer(lHistoryPolyline); } catch (e2) {} }
+      var latlngs = [];
+      var j = 0;
+      while (j < rec.path.length) {
+        latlngs.push([rec.path[j].lat, rec.path[j].lon]);
+        j = j + 1;
+      }
+      lHistoryPolyline = L.polyline(latlngs, { color: "#4da3ff", weight: 4, opacity: 0.85, dashArray: "6 6" }).addTo(lmap);
+      lmap.fitBounds(lHistoryPolyline.getBounds(), { padding: [20, 20] });
+
+      var panel = byId("history-view-panel");
+      var title = byId("history-view-title");
+      var meta = byId("history-view-meta");
+      if (panel && title && meta) {
+        title.textContent = rec.name;
+        var distKm = (rec.distanceM / 1000).toFixed(2);
+        meta.textContent = distKm + " km - duree " + fmtTime(rec.durationSec) + " - " + new Date(rec.dateISO).toLocaleString();
+        panel.style.display = "block";
+      }
+    } catch (e) {}
+  }
+
+  function closeHistoryView() {
+    try {
+      if (lHistoryPolyline && lmap) {
+        lmap.removeLayer(lHistoryPolyline);
+        lHistoryPolyline = null;
+      }
+      var panel = byId("history-view-panel");
+      if (panel) { panel.style.display = "none"; }
     } catch (e) {}
   }
 
@@ -693,6 +1036,34 @@ try {
     }
   }
 
+  function evaluateGhostMode() {
+    if (!state.ghostRecord) {
+      setBanner("", "Choisissez une course fantome dans les reglages");
+      return;
+    }
+    var now = elapsedSeconds();
+    var ghostTime = interpAtDistance(state.ghostRecord.cumDist, state.ghostRecord.cumTime, state.totalDistanceM);
+    if (ghostTime === null) { return; }
+    var diff = ghostTime - now;
+    var label;
+    if (diff >= 0) {
+      label = "EN AVANCE DE " + fmtTime(diff);
+    } else {
+      label = "EN RETARD DE " + fmtTime(0 - diff);
+    }
+    setBanner(diff >= 0 ? "ok" : "fast", label);
+
+    if (now - state.lastGhostAnnounceElapsed >= GHOST_ANNOUNCE_SEC) {
+      state.lastGhostAnnounceElapsed = now;
+      var words = durationSpeechWords(diff);
+      if (diff >= 0) {
+        speak("En avance de " + words);
+      } else {
+        speak("En retard de " + words);
+      }
+    }
+  }
+
   var loopHandle = null;
 
   function tick() {
@@ -719,8 +1090,12 @@ try {
         var avgSpeed = state.totalDistanceM / elapsed;
         mAvg.textContent = fmtPace(speedToPace(avgSpeed));
       }
-      if (v !== null) {
-        if (state.mode === "hold") { evaluateHoldMode(v); } else { evaluateListenMode(v); }
+      if (state.mode === "hold") {
+        if (v !== null) { evaluateHoldMode(v); }
+      } else if (state.mode === "listen") {
+        if (v !== null) { evaluateListenMode(v); }
+      } else if (state.mode === "ghost") {
+        evaluateGhostMode();
       }
       if (state.blackout) {
         var bs = byId("blackout-status");
@@ -758,10 +1133,15 @@ try {
       state.stateCandidateCount = 0;
       state.lastAnnounceElapsed = -9999;
       state.lastAlertBeepTime = 0;
+      state.lastGhostAnnounceElapsed = -9999;
       state.gpsState = "searching";
       lHasCentered = false;
       if (lpolyline) {
         try { lpolyline.setLatLngs([]); } catch (e2) {}
+      }
+      if (lGhostMarker) {
+        try { lmap.removeLayer(lGhostMarker); } catch (e3) {}
+        lGhostMarker = null;
       }
 
       var bStart = byId("btn-start");
@@ -787,8 +1167,10 @@ try {
       loopHandle = setInterval(tick, 1000);
       if (state.mode === "hold") {
         speak("Mode tenue de vitesse activ\u00e9");
-      } else {
+      } else if (state.mode === "listen") {
         speak("Mode \u00e9coute de vitesse activ\u00e9");
+      } else {
+        speak("Mode challenge fant\u00f4me activ\u00e9");
       }
     } catch (e) {
       showToast("Erreur au demarrage: " + e.message);
@@ -812,6 +1194,7 @@ try {
       if (bStop) { bStop.style.display = "none"; }
       setBanner("", "Arrete");
       speak("Course arr\u00eat\u00e9e");
+      saveCurrentRunToHistory();
     } catch (e) {}
   }
 
@@ -840,6 +1223,14 @@ try {
     if (action === "blackout-close") { doBlackoutClose(); return; }
     if (action === "mode-hold") { selectMode("hold"); return; }
     if (action === "mode-listen") { selectMode("listen"); return; }
+    if (action === "mode-ghost") { selectMode("ghost"); return; }
+    if (action === "set-target") { doSetTargetToCurrent(); return; }
+    if (action === "view-history") {
+      var id = el.getAttribute("data-id");
+      viewHistoryRun(id);
+      return;
+    }
+    if (action === "close-history-view") { closeHistoryView(); return; }
     if (action === "unit-hold-pace") {
       state.unitHold = "pace";
       byId("unit-pace").className = "active";
@@ -893,7 +1284,15 @@ try {
     }
   }, false);
 
+  var ghostSelectEl = byId("ghost-select");
+  if (ghostSelectEl) {
+    ghostSelectEl.addEventListener("change", function () {
+      loadGhostByIdValue(ghostSelectEl.value);
+    }, false);
+  }
+
   initLeafletMap();
+  renderHistoryList();
 
   window.PC_STEP_C = "OK";
   var diagC = document.getElementById("diag-c");
