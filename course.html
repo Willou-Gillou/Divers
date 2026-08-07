@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>PaceCoach v0.7</title>
+<title>PaceCoach v0.8</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#161a22; --panel2:#1d2230; --accent:#3ddc97; --accent2:#ffb020;
@@ -87,7 +87,7 @@
 <body>
 
 <div id="diag">
-<b>DIAGNOSTIC PACECOACH v0.7</b>
+<b>DIAGNOSTIC PACECOACH v0.8</b>
 Etape A (script minimal)   : <span id="diag-a">NON EXECUTEE</span>
 Etape B (script principal) : <span id="diag-c">NON EXECUTEE</span>
 Erreur capturee            : <span id="diag-err">aucune</span>
@@ -104,7 +104,7 @@ try{
 <div id="app">
   <header>
     <h1>PaceCoach</h1>
-    <span class="ver">v0.7</span>
+    <span class="ver">v0.8</span>
   </header>
   <div id="build-tag"></div>
   <div id="err-banner"></div>
@@ -242,9 +242,11 @@ try {
   state.blackout = false;
   state.stateCandidate = null;
   state.stateCandidateCount = 0;
+  state.gpsState = "idle";
 
   var MAX_RUN_SPEED = 8.5;
   var MIN_ACCEPTABLE_ACCURACY = 30;
+  var WEAK_ACCEPTABLE_ACCURACY = 60;
   var HYSTERESIS_SEC = 15;
   var DEBOUNCE_SAMPLES = 3;
   var EMA_ALPHA = 0.35;
@@ -399,7 +401,7 @@ try {
     if (pl) { pl.style.display = (which === "listen") ? "block" : "none"; }
     if (pr) { pr.style.display = (which === "run") ? "block" : "none"; }
     if (which === "hold" || which === "listen") { state.mode = which; }
-    if (which === "run") { setTimeout(resizeCanvas, 30); }
+    if (which === "run") { setTimeout(resizeCanvas, 30); setTimeout(drawPath, 60); }
   }
 
   function readTargetFromInputs() {
@@ -441,21 +443,56 @@ try {
     return { x: x, y: -y };
   }
 
+  function drawPlaceholder(rect, ctx, text) {
+    ctx.fillStyle = "#0d0f14";
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.fillStyle = "#4a5266";
+    ctx.font = "13px -apple-system, Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, rect.width / 2, rect.height / 2);
+  }
+
   function drawPath() {
     try {
       if (!canvas) { return; }
       var ctx = canvas.getContext("2d");
       var rect = canvas.getBoundingClientRect();
+
+      if (state.path.length === 0) {
+        var msg0 = "En attente de signal GPS...";
+        if (state.gpsState === "denied") { msg0 = "Acces a la position refuse"; }
+        else if (state.gpsState === "error") { msg0 = "Signal GPS indisponible"; }
+        drawPlaceholder(rect, ctx, msg0);
+        return;
+      }
+
       ctx.clearRect(0, 0, rect.width, rect.height);
       ctx.fillStyle = "#0d0f14";
       ctx.fillRect(0, 0, rect.width, rect.height);
-      if (state.path.length < 2) { return; }
+
       var pts = [];
       var i = 0;
       while (i < state.path.length) {
         pts.push(project(state.path[i].lat, state.path[i].lon));
         i = i + 1;
       }
+
+      if (pts.length === 1) {
+        var cx0 = rect.width / 2;
+        var cy0 = rect.height / 2;
+        ctx.fillStyle = "#ffb020";
+        ctx.beginPath();
+        ctx.arc(cx0, cy0, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,176,32,0.4)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx0, cy0, 12, 0, Math.PI * 2);
+        ctx.stroke();
+        return;
+      }
+
       var minX = Infinity;
       var maxX = -Infinity;
       var minY = Infinity;
@@ -498,6 +535,14 @@ try {
     } catch (e) {}
   }
 
+  function updateGpsFlag(text, cls) {
+    var gf = byId("gps-flag");
+    if (gf) {
+      gf.textContent = text;
+      gf.className = "gps-flag" + (cls ? " " + cls : "");
+    }
+  }
+
   function processPosition(pos) {
     try {
       var lat = pos.coords.latitude;
@@ -505,12 +550,19 @@ try {
       var speedRaw = pos.coords.speed;
       var accuracy = pos.coords.accuracy;
       var t = pos.timestamp;
-      var gf = byId("gps-flag");
-      if (gf) {
-        gf.textContent = "Precision GPS: " + Math.round(accuracy) + " m";
-        gf.className = "gps-flag" + (accuracy > MIN_ACCEPTABLE_ACCURACY ? " weak" : "");
+
+      if (accuracy > WEAK_ACCEPTABLE_ACCURACY) {
+        state.gpsState = "searching";
+        updateGpsFlag("Recherche GPS - precision actuelle: " + Math.round(accuracy) + " m", "weak");
+        return;
       }
-      if (accuracy > MIN_ACCEPTABLE_ACCURACY * 2) { return; }
+      if (accuracy > MIN_ACCEPTABLE_ACCURACY) {
+        state.gpsState = "weak";
+        updateGpsFlag("Signal faible - precision: " + Math.round(accuracy) + " m", "weak");
+      } else {
+        state.gpsState = "fixed";
+        updateGpsFlag("Position fixee - precision: " + Math.round(accuracy) + " m", "");
+      }
 
       var instSpeed = null;
       if (typeof speedRaw === "number" && speedRaw !== null && speedRaw >= 0) {
@@ -524,6 +576,15 @@ try {
         }
       }
       state.lastCoord = { lat: lat, lon: lon, t: t };
+
+      if (state.path.length > 0) {
+        var prev = state.path[state.path.length - 1];
+        var dd = haversine(prev.lat, prev.lon, lat, lon);
+        if (dd < 100) { state.totalDistanceM = state.totalDistanceM + dd; }
+      }
+      state.path.push({ lat: lat, lon: lon, t: t });
+      if (state.path.length > 2000) { state.path.shift(); }
+
       if (instSpeed === null) { return; }
       if (instSpeed > MAX_RUN_SPEED || instSpeed < 0) { return; }
 
@@ -535,21 +596,27 @@ try {
       } else {
         state.emaSpeed = EMA_ALPHA * med + (1 - EMA_ALPHA) * state.emaSpeed;
       }
-
-      if (state.path.length > 0) {
-        var prev = state.path[state.path.length - 1];
-        var dd = haversine(prev.lat, prev.lon, lat, lon);
-        if (dd < 100) { state.totalDistanceM = state.totalDistanceM + dd; }
-      }
-      state.path.push({ lat: lat, lon: lon, t: t });
-      if (state.path.length > 2000) { state.path.shift(); }
     } catch (e) {}
   }
 
   function geoError(err) {
-    var msg = "inconnue";
-    if (err && err.message) { msg = err.message; }
-    showToast("Erreur GPS: " + msg);
+    var code = err ? err.code : 0;
+    var msg = "Erreur GPS inconnue";
+    if (code === 1) {
+      msg = "Acces a la position refuse. Autorisez la localisation pour ce site dans les reglages du navigateur.";
+      state.gpsState = "denied";
+    } else if (code === 2) {
+      msg = "Position indisponible. Verifiez que vous etes a l exterieur ou que le GPS est active.";
+      state.gpsState = "error";
+    } else if (code === 3) {
+      msg = "Recherche du signal GPS en cours...";
+      state.gpsState = "searching";
+    }
+    updateGpsFlag(msg, "weak");
+    if (code === 1 || code === 2) {
+      showToast(msg, 4000);
+    }
+    drawPath();
   }
 
   function elapsedSeconds() {
@@ -596,7 +663,7 @@ try {
         speak("Trop vite");
         setBanner("fast", "TROP VITE");
       } else {
-        speak("Allure stabilisee");
+        speak("Allure stabilis\u00e9e");
         setBanner("ok", "ALLURE STABILISEE");
       }
       state.lastAlertBeepTime = 0;
@@ -618,13 +685,13 @@ try {
       if (state.unitListen === "pace") {
         var p = speedToPace(currentSpeed);
         if (isFinite(p)) {
-          msg = fmtPace(p) + " minute par kilometre";
+          msg = fmtPace(p) + " minute par kilom\u00e8tre";
         } else {
           msg = "en attente de signal";
         }
       } else {
         var kmh = currentSpeed * 3.6;
-        msg = kmh.toFixed(1).replace(".", " virgule ") + " kilometres heure";
+        msg = kmh.toFixed(1).replace(".", " virgule ") + " kilom\u00e8tres heure";
       }
       speak(msg);
       var label;
@@ -703,28 +770,37 @@ try {
       state.stateCandidateCount = 0;
       state.lastAnnounceElapsed = -9999;
       state.lastAlertBeepTime = 0;
+      state.gpsState = "searching";
 
       selectTab("run");
       setTimeout(resizeCanvas, 50);
+      setTimeout(drawPath, 80);
 
       var bStart = byId("btn-start");
       var bStop = byId("btn-stop");
       if (bStart) { bStart.style.display = "none"; }
       if (bStop) { bStop.style.display = "block"; }
       setBanner("", "Recherche GPS...");
+      updateGpsFlag("Recherche du signal GPS...", "weak");
 
       requestWakeLock();
+
+      navigator.geolocation.getCurrentPosition(processPosition, geoError, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 20000
+      });
 
       state.watchId = navigator.geolocation.watchPosition(processPosition, geoError, {
         enableHighAccuracy: true,
         maximumAge: 1000,
-        timeout: 15000
+        timeout: 20000
       });
       loopHandle = setInterval(tick, 1000);
       if (state.mode === "hold") {
-        speak("Mode tenue de vitesse active");
+        speak("Mode tenue de vitesse activ\u00e9");
       } else {
-        speak("Mode ecoute de vitesse active");
+        speak("Mode \u00e9coute de vitesse activ\u00e9");
       }
     } catch (e) {
       showToast("Erreur au demarrage: " + e.message);
@@ -747,7 +823,7 @@ try {
       if (bStart) { bStart.style.display = "block"; }
       if (bStop) { bStop.style.display = "none"; }
       setBanner("", "Arrete");
-      speak("Course arretee");
+      speak("Course arr\u00eat\u00e9e");
     } catch (e) {}
   }
 
