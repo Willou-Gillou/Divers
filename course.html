@@ -188,4 +188,56 @@ try{
 
 <div id="blackout" data-action="blackout-close">
   <div id="blackout-info">Ecran eteint - appuyer pour revenir</div>
-  <div cl
+  <div class="pulse" id="blackout-status">.</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script id="app-code-b64" type="text/plain">CndpbmRvdy5hZGRFdmVudExpc3RlbmVyKCJlcnJvciIsIGZ1bmN0aW9uKGUpewogIHRyeXsKICAgIHZhciBlYiA9IGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCJlcnItYmFubmVyIik7CiAgICBpZihlYil7CiAgICAgIGViLmNsYXNzTGlzdC5hZGQoInNob3ciKTsKICAgICAgZWIudGV4dENvbnRlbnQgPSAiRXJyZXVyIEpTOiAiICsgKGUgJiYgZS5tZXNzYWdlID8gZS5tZXNzYWdlIDogImluY29ubnVlIikgKwogICAgICAgIChlICYmIGUuZmlsZW5hbWUgPyAiICgiICsgZS5maWxlbmFtZSArICI6IiArIGUubGluZW5vICsgIikiIDogIiIpOwogICAgfQogICAgdmFyIGRlID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoImRpYWctZXJyIik7CiAgICBpZihkZSkgZGUudGV4dENvbnRlbnQgPSAoZSAmJiBlLm1lc3NhZ2UgPyBlLm1lc3NhZ2UgOiAiaW5jb25udWUiKSArCiAgICAgIChlICYmIGUuZmlsZW5hbWUgPyAiIEAgIiArIGUuZmlsZW5hbWUgKyAiOiIgKyBlLmxpbmVubyA6ICIiKTsKICB9Y2F0Y2goX2Upe30KfSk7Cgp2YXIgdGFnID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoImJ1aWxkLXRhZyIpOwppZih0YWcpIHRhZy50ZXh0Q29udGVudCA9ICJidWlsZCAiICsgbmV3IERhdGUoKS50b0lTT1N0cmluZygpLnNsaWNlKDAsMTYpLnJlcGxhY2UoIlQiLCIgIikgKyAiIFVUQyI7CnZhciBzdGF0ZSA9IHsKICBtb2RlOiAiaG9sZCIsCiAgdW5pdEhvbGQ6ICJwYWNlIiwKICB1bml0TGlzdGVuOiAicGFjZSIsCiAgbGlzdGVuRnJlcTogMTAsCiAgdGFyZ2V0UGFjZVNlYzogNSo2MCszMCwKICBydW5uaW5nOiBmYWxzZSwKICBzdGFydFRpbWU6IG51bGwsCiAgcGF1c2VkQWNjdW06IDAsCiAgdG90YWxEaXN0YW5jZU06IDAsCiAgc3BlZWRCdWZmZXI6IFtdLAogIGVtYVNwZWVkOiBudWxsLAogIGxhc3RDb29yZDogbnVsbCwKICBwYXRoOiBbXSwKICBwcm9qT3JpZ2luOiBudWxsLAogIGN1cnJlbnRTdGF0dXM6ICJpZGxlIiwKICBsYXN0QW5ub3VuY2VFbGFwc2VkOiAtOTk5OSwKICBsYXN0QWxlcnRCZWVwVGltZTogMCwKICB3YXRjaElkOiBudWxsLAogIHdha2VMb2NrOiBudWxsLAogIGJsYWNrb3V0OiBmYWxzZSwKICBzdGF0ZUNhbmRpZGF0ZTogbnVsbCwKICBzdGF0ZUNhbmRpZGF0ZUNvdW50OiAwCn07CnZhciBNQVhfUlVOX1NQRUVEID0gOC41Owp2YXIgTUlOX0FDQ0VQVEFCTEVfQUNDVVJBQ1kgPSAzMDsKdmFyIEhZU1RFUkVTSVNfU0VDID0gMTU7CnZhciBEQUJfQ0FURV9TQU1QTEVTID0gMzsKdmFyIEVNQV9BTFBIQSA9IDAuMzU7CmZ1bmN0aW9uIGJ5SWQoaWQpeyByZXR1cm4gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoaWQpOyB9CmZ1bmN0aW9uIGZtdFBhY2Uoc2VjUGVyS20pewogIGlmKCFpc0Zpbml0ZShzZWNQZXJLbSkgfHwgc2VjUGVyS20gPD0gMCkgcmV0dXJuICItLTotLSI7CiAgdmFyIG0gPSBNYXRoLmZsb29yKHNlY1BlckttLzYwKTsKICB2YXIgcyA9IE1hdGgucm91bmQoc2VjUGVyS20lNjApOwogIGlmKHM9PT02MCl7IHM9MDsgbT1tKzE7IH0KICB2YXIgbW0gPSBtPDEwID8gIjAiK20gOiAiIittOwogIHZhciBzcyA9IHM8MTAgPyAiMCIrcyA6ICIiK3M7CiAgcmV0dXJuIG1tICsgIjoiICsgc3M7Cn0KZnVuY3Rpb24gZm10VGltZSh0b3RhbFNlYyl7CiAgdmFyIGggPSBNYXRoLmZsb29yKHRvdGFsU2VjLzM2MDApOwogIHZhciBtID0gTWF0aC5mbG9vcigodG90YWxTZWMlMzYwMCkvNjApOwogIHZhciBzID0gTWF0aC5mbG9vcih0b3RhbFNlYyU2MCk7CiAgdmFyIG1tID0gbTwxMCA/ICIwIittIDogIiIrbTsKICB2YXIgc3MgPSBzPDEwID8gIjAiK3MgOiAiIitzOwogIHZhciBoaCA9IGg8MTAgPyAiMCIraCA6ICIiK2g7CiAgcmV0dXJuICgoaD4wID8gaGgrIjoiIDogIiIpKSArIG1tICsgIjoiICsgc3M7Cn0KZnVuY3Rpb24gc3BlZWRUb1BhY2Uodil7IHJldHVybiB2PjAuMDUgPyAxMDAwL3YgOiBJbmZpbml0eTsgfQpmdW5jdGlvbiBwYWNlVG9TcGVlZChwKXsgcmV0dXJuIHA+MCA/IDEwMDAvcCA6IDA7IH0KZnVuY3Rpb24gc2hvd1RvYXN0KG1zZywgbXMpewogIG1zID0gbXMgfHwgMTgwMDsKICB2YXIgdCA9IGJ5SWQoInRvYXN0Iik7CiAgaWYoIXQpIHJldHVybjsKICB0LnRleHRDb250ZW50ID0gbXNnOwogIHQuY2xhc3NMaXN0LmFkZCgic2hvdyIpOwogIGNsZWFyVGltZW91dCh0Ll9oKTsKICB0Ll9oID0gc2V0VGltZW91dChmdW5jdGlvbigpeyB0LmNsYXNzTGlzdC5yZW1vdmUoInNob3ciKTsgfSwgbXMpOwp9CmZ1bmN0aW9uIGhhdmVyc2luZShsYXQxLGxvbjEsbGF0Miwsbmxvbil7fQ==</script>
+
+<script>
+try{
+  document.getElementById('diag-b').textContent = 'OK';
+  var encoded = document.getElementById('app-code-b64').textContent.trim();
+  var decoded;
+  try{
+    decoded = decodeURIComponent(atob(encoded).split('').map(function(c){
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+  }catch(decodeErr){
+    document.getElementById('diag-err').textContent = 'ECHEC DECODAGE: ' + decodeErr.message;
+    throw decodeErr;
+  }
+  var appFn;
+  try{
+    appFn = new Function(decoded);
+  }catch(syntaxErr){
+    document.getElementById('diag-err').textContent =
+      'ERREUR DE SYNTAXE dans le code applicatif: ' + syntaxErr.message +
+      ' (type: ' + syntaxErr.name + ')';
+    var eb = document.getElementById('err-banner');
+    if(eb){
+      eb.classList.add('show');
+      eb.textContent = 'Erreur de syntaxe: ' + syntaxErr.message;
+    }
+    throw syntaxErr;
+  }
+  try{
+    appFn();
+    document.getElementById('diag-c').textContent = 'OK';
+    document.getElementById('diag').classList.add('ok');
+  }catch(runtimeErr){
+    document.getElementById('diag-err').textContent =
+      'ERREUR A L EXECUTION: ' + runtimeErr.message;
+    var eb2 = document.getElementById('err-banner');
+    if(eb2){
+      eb2.classList.add('show');
+      eb2.textContent = 'Erreur execution: ' + runtimeErr.message;
+    }
+    throw runtimeErr;
+  }
+}catch(fatal){
+  try{ console.error('PaceCoach fatal:', fatal); }catch(_e){}
+}
+</script>
+</body>
+</html>
