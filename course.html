@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>PaceCoach v0.9</title>
+<title>PaceCoach v1.0</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#161a22; --panel2:#1d2230; --accent:#3ddc97; --accent2:#ffb020;
@@ -28,18 +28,13 @@
     border-bottom:1px solid #5a4a1a;line-height:1.4;white-space:pre-wrap;word-break:break-word;display:none;}
   #err-banner.show{display:block;}
   #build-tag{font-size:10px;color:#4a5266;text-align:center;padding:3px 0;background:#0d0f14;}
-  .tabs{display:flex;gap:6px;padding:8px 10px;background:var(--panel);}
-  .tab{flex:1;text-align:center;padding:10px 6px;border-radius:10px;background:var(--panel2);
-    color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;user-select:none;border:1px solid transparent;
-    -webkit-user-select:none;}
-  .tab.active{background:rgba(61,220,151,.12);color:var(--accent);border-color:rgba(61,220,151,.4);}
   main{flex:1;overflow-y:auto;padding:12px 14px 100px;-webkit-overflow-scrolling:touch;}
   .card{background:var(--panel);border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid #232838;}
   .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 10px;}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
   .row + .row{margin-top:10px;}
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px;}
-  input[type=number]{
+  input[type=number], input[type=text]{
     background:#0d0f14;border:1px solid #2a2f3d;color:var(--text);border-radius:8px;
     padding:9px 10px;font-size:15px;width:100%;
   }
@@ -63,10 +58,23 @@
   .metrics div{background:#0d0f14;border-radius:10px;padding:8px 4px;}
   .metrics .v{font-size:17px;font-weight:700;}
   .metrics .l{font-size:10px;color:var(--muted);text-transform:uppercase;}
-  #map{width:100%;height:220px;border-radius:12px;background:#0d0f14;display:block;
-    border:1px solid #2a2f3d;}
   .gps-flag{font-size:11px;color:var(--muted);margin-top:6px;text-align:center;}
   .gps-flag.weak{color:var(--accent2);}
+
+  .mode-switch{display:flex;gap:8px;}
+  .mode-switch button{flex:1;padding:12px 6px;border-radius:12px;border:1px solid #2a2f3d;background:#0d0f14;
+    color:var(--muted);font-size:14px;font-weight:700;cursor:pointer;}
+  .mode-switch button.active{background:rgba(61,220,151,.15);color:var(--accent);border-color:var(--accent);}
+
+  #gmap{width:100%;height:280px;border-radius:12px;border:1px solid #2a2f3d;display:none;background:#0d0f14;}
+  #map-setup{padding:6px 0;}
+  #map-setup p{font-size:12px;color:var(--muted);line-height:1.6;margin:0 0 10px;}
+  #map-setup a{color:var(--accent);text-decoration:none;}
+  .map-key-row{display:flex;gap:8px;}
+  .map-key-row input{flex:1;}
+  .map-key-row button{padding:9px 14px;border-radius:8px;border:none;background:var(--accent);
+    color:#062017;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;}
+
   footer{position:fixed;bottom:0;left:0;right:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
     background:linear-gradient(180deg,transparent,var(--bg) 30%);display:flex;gap:10px;z-index:50;}
   .btn{flex:1;padding:14px 6px;border-radius:12px;border:none;font-size:15px;font-weight:700;cursor:pointer;
@@ -88,7 +96,7 @@
 <body>
 
 <div id="diag">
-<b>DIAGNOSTIC PACECOACH v0.9</b>
+<b>DIAGNOSTIC PACECOACH v1.0</b>
 Etape A (script minimal)   : <span id="diag-a">NON EXECUTEE</span>
 Etape B (script principal) : <span id="diag-c">NON EXECUTEE</span>
 Erreur capturee            : <span id="diag-err">aucune</span>
@@ -105,66 +113,20 @@ try{
 <div id="app">
   <header>
     <h1>PaceCoach</h1>
-    <span class="ver">v0.9</span>
+    <span class="ver">v1.0</span>
   </header>
   <div id="build-tag"></div>
   <div id="err-banner"></div>
 
-  <div class="tabs" id="tabs">
-    <div class="tab active" data-tab="hold">Tenue de vitesse</div>
-    <div class="tab" data-tab="listen">Ecoute de vitesse</div>
-    <div class="tab" data-tab="run">Course</div>
-  </div>
-
   <main>
-    <section id="panel-hold" class="panel">
-      <div class="card">
-        <h2>Unite</h2>
-        <div class="unit-toggle">
-          <button type="button" id="unit-pace" class="active" data-action="unit-hold-pace">min/km</button>
-          <button type="button" id="unit-kmh" data-action="unit-hold-kmh">km/h</button>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Allure ou vitesse a tenir</h2>
-        <div class="row" id="hold-pace-row">
-          <div style="flex:1"><label>Minutes</label><input type="number" id="hold-min" min="2" max="15" value="5"></div>
-          <div style="flex:1"><label>Secondes</label><input type="number" id="hold-sec" min="0" max="59" value="30"></div>
-        </div>
-        <div class="row" id="hold-kmh-row" style="display:none">
-          <div style="flex:1"><label>Vitesse (km/h)</label><input type="number" id="hold-kmh-val" min="3" max="25" step="0.1" value="11.0"></div>
-        </div>
-        <p class="help">Tolerance fixe : plus ou moins 15 secondes par km. En dessous : alerte "trop lent" et bip toutes les 5 secondes. Au-dessus : alerte "trop vite" et bip toutes les 5 secondes. Dans la fenetre : "allure stabilisee".</p>
-      </div>
-    </section>
-
-    <section id="panel-listen" class="panel" style="display:none">
-      <div class="card">
-        <h2>Unite annoncee</h2>
-        <div class="unit-toggle">
-          <button type="button" id="unit-pace-l" class="active" data-action="unit-listen-pace">min/km</button>
-          <button type="button" id="unit-kmh-l" data-action="unit-listen-kmh">km/h</button>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Frequence des annonces</h2>
-        <div class="freq-grid" id="freq-grid">
-          <button type="button" data-f="10" class="freq active" data-action="freq">10 s</button>
-          <button type="button" data-f="15" class="freq" data-action="freq">15 s</button>
-          <button type="button" data-f="20" class="freq" data-action="freq">20 s</button>
-          <button type="button" data-f="30" class="freq" data-action="freq">30 s</button>
-        </div>
-        <p class="help">L'allure ou la vitesse courante est annoncee vocalement a l'intervalle choisi.</p>
-      </div>
-    </section>
-
-    <section id="panel-run" class="panel" style="display:none">
+    <section id="panel-run" class="panel">
       <div class="card big-display">
         <div class="pace" id="live-pace">--:--</div>
         <div class="sub" id="live-sub">min/km - en attente de GPS</div>
         <div class="status-banner" id="status-banner">Pret</div>
         <div class="gps-flag" id="gps-flag"></div>
       </div>
+
       <div class="card">
         <div class="metrics">
           <div><div class="v" id="m-dist">0.00</div><div class="l">km</div></div>
@@ -172,9 +134,57 @@ try{
           <div><div class="v" id="m-avg">--:--</div><div class="l">allure moy.</div></div>
         </div>
       </div>
+
+      <div class="card">
+        <h2>Type de coaching</h2>
+        <div class="mode-switch">
+          <button type="button" id="mode-hold" class="active" data-action="mode-hold">Tenue de vitesse</button>
+          <button type="button" id="mode-listen" data-action="mode-listen">Ecoute de vitesse</button>
+        </div>
+      </div>
+
+      <div class="card" id="settings-hold">
+        <h2>Reglages - Tenue de vitesse</h2>
+        <div class="unit-toggle">
+          <button type="button" id="unit-pace" class="active" data-action="unit-hold-pace">min/km</button>
+          <button type="button" id="unit-kmh" data-action="unit-hold-kmh">km/h</button>
+        </div>
+        <div class="row" id="hold-pace-row" style="margin-top:10px">
+          <div style="flex:1"><label>Minutes</label><input type="number" id="hold-min" min="2" max="15" value="5"></div>
+          <div style="flex:1"><label>Secondes</label><input type="number" id="hold-sec" min="0" max="59" value="30"></div>
+        </div>
+        <div class="row" id="hold-kmh-row" style="display:none;margin-top:10px">
+          <div style="flex:1"><label>Vitesse (km/h)</label><input type="number" id="hold-kmh-val" min="3" max="25" step="0.1" value="11.0"></div>
+        </div>
+        <p class="help">Tolerance fixe : plus ou moins 15 secondes par km. En dessous : alerte "trop lent" et bip toutes les 5 secondes. Au-dessus : alerte "trop vite" et bip toutes les 5 secondes. Dans la fenetre : "allure stabilisee". Modifiable a tout moment, meme pendant la course.</p>
+      </div>
+
+      <div class="card" id="settings-listen" style="display:none">
+        <h2>Reglages - Ecoute de vitesse</h2>
+        <div class="unit-toggle">
+          <button type="button" id="unit-pace-l" class="active" data-action="unit-listen-pace">min/km</button>
+          <button type="button" id="unit-kmh-l" data-action="unit-listen-kmh">km/h</button>
+        </div>
+        <h2 style="margin-top:14px">Frequence des annonces</h2>
+        <div class="freq-grid">
+          <button type="button" data-f="10" class="freq active" data-action="freq">10 s</button>
+          <button type="button" data-f="15" class="freq" data-action="freq">15 s</button>
+          <button type="button" data-f="20" class="freq" data-action="freq">20 s</button>
+          <button type="button" data-f="30" class="freq" data-action="freq">30 s</button>
+        </div>
+        <p class="help">L'allure ou la vitesse courante est annoncee vocalement a l'intervalle choisi. Modifiable a tout moment, meme pendant la course.</p>
+      </div>
+
       <div class="card">
         <h2>Trajet</h2>
-        <canvas id="map"></canvas>
+        <div id="map-setup">
+          <p>Cette carte utilise Google Maps (vue hybride satellite avec noms). Renseignez votre propre cle API Google Maps JavaScript pour l'activer. Creez-en une gratuitement sur <a href="https://console.cloud.google.com/google/maps-apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a> (activez l'API "Maps JavaScript API"). La cle est enregistree uniquement sur cet appareil.</p>
+          <div class="map-key-row">
+            <input type="text" id="gmaps-key-input" placeholder="Cle API Google Maps">
+            <button type="button" data-action="load-map">Charger la carte</button>
+          </div>
+        </div>
+        <div id="gmap"></div>
       </div>
     </section>
   </main>
@@ -235,7 +245,6 @@ try {
   state.lastEmaTime = null;
   state.lastCoord = null;
   state.path = [];
-  state.projOrigin = null;
   state.currentStatus = "idle";
   state.lastAnnounceElapsed = -9999;
   state.lastAlertBeepTime = 0;
@@ -245,6 +254,8 @@ try {
   state.stateCandidate = null;
   state.stateCandidateCount = 0;
   state.gpsState = "idle";
+  state.mapReady = false;
+  state.mapZoomSet = false;
 
   var MAX_RUN_SPEED = 8.5;
   var MIN_ACCEPTABLE_ACCURACY = 30;
@@ -254,6 +265,7 @@ try {
   var MEDIAN_WINDOW = 7;
   var MAX_ACCEL = 3.2;
   var WINDOW_MS = 3000;
+  var GMAPS_KEY_STORAGE = "pacecoach_gmaps_key";
 
   function byId(id) {
     return document.getElementById(id);
@@ -421,31 +433,16 @@ try {
     }
   });
 
-  function selectTab(which) {
-    var tabs = document.querySelectorAll(".tab");
-    var j = 0;
-    while (j < tabs.length) {
-      var isMatch = tabs[j].getAttribute("data-tab") === which;
-      if (isMatch) {
-        tabs[j].className = "tab active";
-      } else {
-        tabs[j].className = "tab";
-      }
-      j = j + 1;
-    }
-    var ph = byId("panel-hold");
-    var pl = byId("panel-listen");
-    var pr = byId("panel-run");
-    if (ph) { ph.style.display = (which === "hold") ? "block" : "none"; }
-    if (pl) { pl.style.display = (which === "listen") ? "block" : "none"; }
-    if (pr) { pr.style.display = (which === "run") ? "block" : "none"; }
-    if (which === "hold" || which === "listen") { state.mode = which; }
-    if (which === "run") {
-      resizeCanvas();
-      drawPath();
-      setTimeout(function () { resizeCanvas(); drawPath(); }, 60);
-      setTimeout(function () { resizeCanvas(); drawPath(); }, 250);
-    }
+  function selectMode(which) {
+    state.mode = which;
+    var bHold = byId("mode-hold");
+    var bListen = byId("mode-listen");
+    var sHold = byId("settings-hold");
+    var sListen = byId("settings-listen");
+    if (bHold) { bHold.className = (which === "hold") ? "active" : ""; }
+    if (bListen) { bListen.className = (which === "listen") ? "active" : ""; }
+    if (sHold) { sHold.style.display = (which === "hold") ? "block" : "none"; }
+    if (sListen) { sListen.style.display = (which === "listen") ? "block" : "none"; }
   }
 
   function readTargetFromInputs() {
@@ -459,149 +456,85 @@ try {
     }
   }
 
-  var canvas = byId("map");
+  var gmap = null;
+  var gmarker = null;
+  var gpolyline = null;
 
-  function resizeCanvas() {
+  function saveMapsKey(key) {
+    try { window.localStorage.setItem(GMAPS_KEY_STORAGE, key); } catch (e) {}
+  }
+  function loadSavedMapsKey() {
+    try { return window.localStorage.getItem(GMAPS_KEY_STORAGE) || ""; } catch (e) { return ""; }
+  }
+
+  window.pcInitMap = function () {
     try {
-      if (!canvas) { return; }
-      var dpr = window.devicePixelRatio || 1;
-      var rect = canvas.getBoundingClientRect();
-      var w = Math.max(rect.width, 1);
-      var h = Math.max(rect.height, 1);
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
-      var ctx = canvas.getContext("2d");
-      if (ctx) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+      var mapDiv = byId("gmap");
+      if (!mapDiv) { return; }
+      var center = { lat: 48.8566, lng: 2.3522 };
+      gmap = new google.maps.Map(mapDiv, {
+        center: center,
+        zoom: 16,
+        mapTypeId: google.maps.MapTypeId.HYBRID,
+        zoomControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        rotateControl: false,
+        disableDefaultUI: false
+      });
+      gmarker = new google.maps.Marker({
+        map: gmap,
+        position: center,
+        title: "Position actuelle"
+      });
+      gpolyline = new google.maps.Polyline({
+        map: gmap,
+        path: [],
+        strokeColor: "#3ddc97",
+        strokeWeight: 4,
+        strokeOpacity: 0.9
+      });
+      state.mapReady = true;
+      var setup = byId("map-setup");
+      if (setup) { setup.style.display = "none"; }
+      mapDiv.style.display = "block";
+    } catch (e) {
+      showToast("Erreur initialisation carte: " + e.message, 3000);
+    }
+  };
+
+  function loadGoogleMaps(apiKey) {
+    try {
+      if (!apiKey) { return; }
+      saveMapsKey(apiKey);
+      var existing = document.getElementById("gmaps-script");
+      if (existing) { return; }
+      var s = document.createElement("script");
+      s.id = "gmaps-script";
+      s.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(apiKey) + "&callback=pcInitMap";
+      s.async = true;
+      s.onerror = function () {
+        showToast("Impossible de charger Google Maps. Verifiez la cle API.", 4000);
+      };
+      document.head.appendChild(s);
     } catch (e) {}
   }
 
-  window.addEventListener("resize", resizeCanvas);
-
-  function project(lat, lon) {
-    if (!state.projOrigin) {
-      state.projOrigin = { lat: lat, lon: lon };
-    }
-    var R = 6371000;
-    var x = toRad(lon - state.projOrigin.lon) * Math.cos(toRad(state.projOrigin.lat)) * R;
-    var y = toRad(lat - state.projOrigin.lat) * R;
-    return { x: x, y: -y };
-  }
-
-  function drawGrid(rect, ctx) {
-    ctx.strokeStyle = "#1a1e28";
-    ctx.lineWidth = 1;
-    var step = 30;
-    var x = step;
-    while (x < rect.width) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, rect.height);
-      ctx.stroke();
-      x = x + step;
-    }
-    var y = step;
-    while (y < rect.height) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(rect.width, y);
-      ctx.stroke();
-      y = y + step;
-    }
-  }
-
-  function drawPlaceholder(rect, ctx, text) {
-    ctx.fillStyle = "#0d0f14";
-    ctx.fillRect(0, 0, rect.width, rect.height);
-    drawGrid(rect, ctx);
-    ctx.fillStyle = "#8b93a7";
-    ctx.font = "bold 13px -apple-system, Arial, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, rect.width / 2, rect.height / 2);
-  }
-
-  function drawPath() {
+  function updateMapPosition(lat, lon) {
     try {
-      if (!canvas) { return; }
-      var ctx = canvas.getContext("2d");
-      if (!ctx) { return; }
-      var rect = canvas.getBoundingClientRect();
-      if (rect.width < 2 || rect.height < 2) { return; }
-
-      if (state.path.length === 0) {
-        var msg0 = "En attente de signal GPS...";
-        if (state.gpsState === "denied") { msg0 = "Acces a la position refuse"; }
-        else if (state.gpsState === "error") { msg0 = "Signal GPS indisponible"; }
-        drawPlaceholder(rect, ctx, msg0);
-        return;
+      if (!state.mapReady || !gmap) { return; }
+      var latLng = { lat: lat, lng: lon };
+      if (gmarker) { gmarker.setPosition(latLng); }
+      gmap.setCenter(latLng);
+      if (!state.mapZoomSet) {
+        gmap.setZoom(17);
+        state.mapZoomSet = true;
       }
-
-      ctx.clearRect(0, 0, rect.width, rect.height);
-      ctx.fillStyle = "#0d0f14";
-      ctx.fillRect(0, 0, rect.width, rect.height);
-      drawGrid(rect, ctx);
-
-      var pts = [];
-      var i = 0;
-      while (i < state.path.length) {
-        pts.push(project(state.path[i].lat, state.path[i].lon));
-        i = i + 1;
+      if (gpolyline) {
+        var path = gpolyline.getPath();
+        path.push(new google.maps.LatLng(lat, lon));
       }
-
-      if (pts.length === 1) {
-        var cx0 = rect.width / 2;
-        var cy0 = rect.height / 2;
-        ctx.fillStyle = "#ffb020";
-        ctx.beginPath();
-        ctx.arc(cx0, cy0, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "rgba(255,176,32,0.4)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(cx0, cy0, 12, 0, Math.PI * 2);
-        ctx.stroke();
-        return;
-      }
-
-      var minX = Infinity;
-      var maxX = -Infinity;
-      var minY = Infinity;
-      var maxY = -Infinity;
-      i = 0;
-      while (i < pts.length) {
-        if (pts[i].x < minX) { minX = pts[i].x; }
-        if (pts[i].x > maxX) { maxX = pts[i].x; }
-        if (pts[i].y < minY) { minY = pts[i].y; }
-        if (pts[i].y > maxY) { maxY = pts[i].y; }
-        i = i + 1;
-      }
-      var pad = 20;
-      var w = Math.max(rect.width - pad * 2, 1);
-      var h = Math.max(rect.height - pad * 2, 1);
-      var spanX = Math.max(maxX - minX, 5);
-      var spanY = Math.max(maxY - minY, 5);
-      var scale = Math.min(w / spanX, h / spanY);
-      var cx = (minX + maxX) / 2;
-      var cy = (minY + maxY) / 2;
-      ctx.strokeStyle = "#3ddc97";
-      ctx.lineWidth = 3;
-      ctx.lineJoin = "round";
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      i = 0;
-      while (i < pts.length) {
-        var sx = rect.width / 2 + (pts[i].x - cx) * scale;
-        var sy = rect.height / 2 + (pts[i].y - cy) * scale;
-        if (i === 0) { ctx.moveTo(sx, sy); } else { ctx.lineTo(sx, sy); }
-        i = i + 1;
-      }
-      ctx.stroke();
-      var lastX = rect.width / 2 + (pts[pts.length - 1].x - cx) * scale;
-      var lastY = rect.height / 2 + (pts[pts.length - 1].y - cy) * scale;
-      ctx.fillStyle = "#ffb020";
-      ctx.beginPath();
-      ctx.arc(lastX, lastY, 5, 0, Math.PI * 2);
-      ctx.fill();
     } catch (e) {}
   }
 
@@ -665,6 +598,8 @@ try {
       state.path.push({ lat: lat, lon: lon, t: t });
       if (state.path.length > 2000) { state.path.shift(); }
 
+      updateMapPosition(lat, lon);
+
       if (instSpeed === null) { return; }
       if (instSpeed > MAX_RUN_SPEED || instSpeed < 0) { return; }
 
@@ -715,7 +650,6 @@ try {
     if (code === 1 || code === 2) {
       showToast(msg, 4000);
     }
-    drawPath();
   }
 
   function elapsedSeconds() {
@@ -800,7 +734,6 @@ try {
   }
 
   var loopHandle = null;
-  var canvasHeartbeat = null;
 
   function tick() {
     try {
@@ -829,7 +762,6 @@ try {
       if (v !== null) {
         if (state.mode === "hold") { evaluateHoldMode(v); } else { evaluateListenMode(v); }
       }
-      drawPath();
       if (state.blackout) {
         var bs = byId("blackout-status");
         var sb = byId("status-banner");
@@ -857,7 +789,6 @@ try {
       state.pausedAccum = 0;
       state.totalDistanceM = 0;
       state.path = [];
-      state.projOrigin = null;
       state.speedBuffer = [];
       state.emaSpeed = null;
       state.lastEmaTime = null;
@@ -868,8 +799,10 @@ try {
       state.lastAnnounceElapsed = -9999;
       state.lastAlertBeepTime = 0;
       state.gpsState = "searching";
-
-      selectTab("run");
+      state.mapZoomSet = false;
+      if (gpolyline) {
+        try { gpolyline.setPath([]); } catch (e2) {}
+      }
 
       var bStart = byId("btn-start");
       var bStop = byId("btn-stop");
@@ -945,6 +878,15 @@ try {
     if (action === "stop") { doStop(); return; }
     if (action === "blackout") { doBlackoutToggle(); return; }
     if (action === "blackout-close") { doBlackoutClose(); return; }
+    if (action === "mode-hold") { selectMode("hold"); return; }
+    if (action === "mode-listen") { selectMode("listen"); return; }
+    if (action === "load-map") {
+      var input = byId("gmaps-key-input");
+      var key = input ? input.value.trim() : "";
+      if (!key) { showToast("Entrez une cle API Google Maps valide"); return; }
+      loadGoogleMaps(key);
+      return;
+    }
     if (action === "unit-hold-pace") {
       state.unitHold = "pace";
       byId("unit-pace").className = "active";
@@ -998,33 +940,12 @@ try {
     }
   }, false);
 
-  var tabsEl = document.getElementById("tabs");
-  if (tabsEl) {
-    tabsEl.addEventListener("click", function (ev) {
-      var el = ev.target;
-      while (el && el !== tabsEl) {
-        if (el.className && el.className.indexOf("tab") !== -1) {
-          selectTab(el.getAttribute("data-tab"));
-          return;
-        }
-        el = el.parentNode;
-      }
-    }, false);
+  var savedKey = loadSavedMapsKey();
+  if (savedKey) {
+    var keyInput = byId("gmaps-key-input");
+    if (keyInput) { keyInput.value = savedKey; }
+    loadGoogleMaps(savedKey);
   }
-
-  window.addEventListener("load", function () {
-    resizeCanvas();
-    drawPath();
-  });
-  resizeCanvas();
-
-  canvasHeartbeat = setInterval(function () {
-    var pr = byId("panel-run");
-    if (pr && pr.style.display === "block") {
-      resizeCanvas();
-      drawPath();
-    }
-  }, 700);
 
   window.PC_STEP_C = "OK";
   var diagC = document.getElementById("diag-c");
