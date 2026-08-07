@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>PaceCoach v1.0</title>
+<title>PaceCoach v1.1</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root{
     --bg:#0f1115; --panel:#161a22; --panel2:#1d2230; --accent:#3ddc97; --accent2:#ffb020;
@@ -34,7 +35,7 @@
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
   .row + .row{margin-top:10px;}
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px;}
-  input[type=number], input[type=text]{
+  input[type=number]{
     background:#0d0f14;border:1px solid #2a2f3d;color:var(--text);border-radius:8px;
     padding:9px 10px;font-size:15px;width:100%;
   }
@@ -66,14 +67,8 @@
     color:var(--muted);font-size:14px;font-weight:700;cursor:pointer;}
   .mode-switch button.active{background:rgba(61,220,151,.15);color:var(--accent);border-color:var(--accent);}
 
-  #gmap{width:100%;height:280px;border-radius:12px;border:1px solid #2a2f3d;display:none;background:#0d0f14;}
-  #map-setup{padding:6px 0;}
-  #map-setup p{font-size:12px;color:var(--muted);line-height:1.6;margin:0 0 10px;}
-  #map-setup a{color:var(--accent);text-decoration:none;}
-  .map-key-row{display:flex;gap:8px;}
-  .map-key-row input{flex:1;}
-  .map-key-row button{padding:9px 14px;border-radius:8px;border:none;background:var(--accent);
-    color:#062017;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;}
+  #leafletmap{width:100%;height:300px;border-radius:12px;border:1px solid #2a2f3d;background:#0d0f14;}
+  .leaflet-container{background:#0d0f14;}
 
   footer{position:fixed;bottom:0;left:0;right:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
     background:linear-gradient(180deg,transparent,var(--bg) 30%);display:flex;gap:10px;z-index:50;}
@@ -96,7 +91,7 @@
 <body>
 
 <div id="diag">
-<b>DIAGNOSTIC PACECOACH v1.0</b>
+<b>DIAGNOSTIC PACECOACH v1.1</b>
 Etape A (script minimal)   : <span id="diag-a">NON EXECUTEE</span>
 Etape B (script principal) : <span id="diag-c">NON EXECUTEE</span>
 Erreur capturee            : <span id="diag-err">aucune</span>
@@ -110,10 +105,12 @@ try{
 }catch(e){}
 </script>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <div id="app">
   <header>
     <h1>PaceCoach</h1>
-    <span class="ver">v1.0</span>
+    <span class="ver">v1.1</span>
   </header>
   <div id="build-tag"></div>
   <div id="err-banner"></div>
@@ -177,14 +174,7 @@ try{
 
       <div class="card">
         <h2>Trajet</h2>
-        <div id="map-setup">
-          <p>Cette carte utilise Google Maps (vue hybride satellite avec noms). Renseignez votre propre cle API Google Maps JavaScript pour l'activer. Creez-en une gratuitement sur <a href="https://console.cloud.google.com/google/maps-apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a> (activez l'API "Maps JavaScript API"). La cle est enregistree uniquement sur cet appareil.</p>
-          <div class="map-key-row">
-            <input type="text" id="gmaps-key-input" placeholder="Cle API Google Maps">
-            <button type="button" data-action="load-map">Charger la carte</button>
-          </div>
-        </div>
-        <div id="gmap"></div>
+        <div id="leafletmap"></div>
       </div>
     </section>
   </main>
@@ -255,7 +245,6 @@ try {
   state.stateCandidateCount = 0;
   state.gpsState = "idle";
   state.mapReady = false;
-  state.mapZoomSet = false;
 
   var MAX_RUN_SPEED = 8.5;
   var MIN_ACCEPTABLE_ACCURACY = 30;
@@ -265,7 +254,6 @@ try {
   var MEDIAN_WINDOW = 7;
   var MAX_ACCEL = 3.2;
   var WINDOW_MS = 3000;
-  var GMAPS_KEY_STORAGE = "pacecoach_gmaps_key";
 
   function byId(id) {
     return document.getElementById(id);
@@ -456,85 +444,57 @@ try {
     }
   }
 
-  var gmap = null;
-  var gmarker = null;
-  var gpolyline = null;
+  var lmap = null;
+  var lmarker = null;
+  var lpolyline = null;
+  var lHasCentered = false;
 
-  function saveMapsKey(key) {
-    try { window.localStorage.setItem(GMAPS_KEY_STORAGE, key); } catch (e) {}
-  }
-  function loadSavedMapsKey() {
-    try { return window.localStorage.getItem(GMAPS_KEY_STORAGE) || ""; } catch (e) { return ""; }
-  }
-
-  window.pcInitMap = function () {
+  function initLeafletMap() {
     try {
-      var mapDiv = byId("gmap");
+      if (typeof L === "undefined") {
+        setTimeout(initLeafletMap, 300);
+        return;
+      }
+      var mapDiv = byId("leafletmap");
       if (!mapDiv) { return; }
-      var center = { lat: 48.8566, lng: 2.3522 };
-      gmap = new google.maps.Map(mapDiv, {
-        center: center,
-        zoom: 16,
-        mapTypeId: google.maps.MapTypeId.HYBRID,
+      lmap = L.map(mapDiv, {
         zoomControl: true,
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: false,
-        rotateControl: false,
-        disableDefaultUI: false
-      });
-      gmarker = new google.maps.Marker({
-        map: gmap,
-        position: center,
-        title: "Position actuelle"
-      });
-      gpolyline = new google.maps.Polyline({
-        map: gmap,
-        path: [],
-        strokeColor: "#3ddc97",
-        strokeWeight: 4,
-        strokeOpacity: 0.9
-      });
+        attributionControl: true
+      }).setView([48.8566, 2.3522], 16);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors"
+      }).addTo(lmap);
+
+      lpolyline = L.polyline([], { color: "#3ddc97", weight: 4, opacity: 0.9 }).addTo(lmap);
+
+      lmarker = L.circleMarker([48.8566, 2.3522], {
+        radius: 8,
+        color: "#ffb020",
+        weight: 2,
+        fillColor: "#ffb020",
+        fillOpacity: 0.9
+      }).addTo(lmap);
+
       state.mapReady = true;
-      var setup = byId("map-setup");
-      if (setup) { setup.style.display = "none"; }
-      mapDiv.style.display = "block";
+      setTimeout(function () {
+        try { lmap.invalidateSize(); } catch (e2) {}
+      }, 200);
     } catch (e) {
       showToast("Erreur initialisation carte: " + e.message, 3000);
     }
-  };
-
-  function loadGoogleMaps(apiKey) {
-    try {
-      if (!apiKey) { return; }
-      saveMapsKey(apiKey);
-      var existing = document.getElementById("gmaps-script");
-      if (existing) { return; }
-      var s = document.createElement("script");
-      s.id = "gmaps-script";
-      s.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(apiKey) + "&callback=pcInitMap";
-      s.async = true;
-      s.onerror = function () {
-        showToast("Impossible de charger Google Maps. Verifiez la cle API.", 4000);
-      };
-      document.head.appendChild(s);
-    } catch (e) {}
   }
 
   function updateMapPosition(lat, lon) {
     try {
-      if (!state.mapReady || !gmap) { return; }
-      var latLng = { lat: lat, lng: lon };
-      if (gmarker) { gmarker.setPosition(latLng); }
-      gmap.setCenter(latLng);
-      if (!state.mapZoomSet) {
-        gmap.setZoom(17);
-        state.mapZoomSet = true;
-      }
-      if (gpolyline) {
-        var path = gpolyline.getPath();
-        path.push(new google.maps.LatLng(lat, lon));
-      }
+      if (!state.mapReady || !lmap) { return; }
+      var latLng = [lat, lon];
+      if (lmarker) { lmarker.setLatLng(latLng); }
+      if (lpolyline) { lpolyline.addLatLng(latLng); }
+      var zoomToUse = lHasCentered ? lmap.getZoom() : 17;
+      lmap.setView(latLng, zoomToUse);
+      lHasCentered = true;
     } catch (e) {}
   }
 
@@ -799,9 +759,9 @@ try {
       state.lastAnnounceElapsed = -9999;
       state.lastAlertBeepTime = 0;
       state.gpsState = "searching";
-      state.mapZoomSet = false;
-      if (gpolyline) {
-        try { gpolyline.setPath([]); } catch (e2) {}
+      lHasCentered = false;
+      if (lpolyline) {
+        try { lpolyline.setLatLngs([]); } catch (e2) {}
       }
 
       var bStart = byId("btn-start");
@@ -880,13 +840,6 @@ try {
     if (action === "blackout-close") { doBlackoutClose(); return; }
     if (action === "mode-hold") { selectMode("hold"); return; }
     if (action === "mode-listen") { selectMode("listen"); return; }
-    if (action === "load-map") {
-      var input = byId("gmaps-key-input");
-      var key = input ? input.value.trim() : "";
-      if (!key) { showToast("Entrez une cle API Google Maps valide"); return; }
-      loadGoogleMaps(key);
-      return;
-    }
     if (action === "unit-hold-pace") {
       state.unitHold = "pace";
       byId("unit-pace").className = "active";
@@ -940,12 +893,7 @@ try {
     }
   }, false);
 
-  var savedKey = loadSavedMapsKey();
-  if (savedKey) {
-    var keyInput = byId("gmaps-key-input");
-    if (keyInput) { keyInput.value = savedKey; }
-    loadGoogleMaps(savedKey);
-  }
+  initLeafletMap();
 
   window.PC_STEP_C = "OK";
   var diagC = document.getElementById("diag-c");
