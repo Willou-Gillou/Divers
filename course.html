@@ -3,25 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>PaceCoach v0.1 — Contrôle de vitesse de course</title>
+<title>PaceCoach v0.2 — Contrôle de vitesse de course</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#161a22; --panel2:#1d2230; --accent:#3ddc97; --accent2:#ffb020;
     --danger:#ff4d4f; --slow:#4da3ff; --fast:#ff4d4f; --ok:#3ddc97; --text:#eef1f6; --muted:#8b93a7;
   }
-  *{box-sizing:border-box;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;overscroll-behavior:none;}
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;overscroll-behavior:none;
+    touch-action:manipulation;}
   #app{display:flex;flex-direction:column;height:100vh;height:100dvh;}
   header{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;
     background:var(--panel);border-bottom:1px solid #232838;}
   header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.3px;}
   header .ver{font-size:11px;color:var(--muted);}
+  #noscript-banner{display:none;background:#3a1d1d;color:#ffb3b3;padding:10px 14px;font-size:12px;
+    border-bottom:1px solid #5a2a2a;line-height:1.5;}
+  #noscript-banner.show{display:block;}
+  #err-banner{display:none;background:#3a2f0d;color:#ffe08a;padding:8px 14px;font-size:11px;
+    border-bottom:1px solid #5a4a1a;line-height:1.4;}
+  #err-banner.show{display:block;}
   .tabs{display:flex;gap:6px;padding:8px 10px;background:var(--panel);}
   .tab{flex:1;text-align:center;padding:10px 6px;border-radius:10px;background:var(--panel2);
-    color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;user-select:none;border:1px solid transparent;}
+    color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;user-select:none;border:1px solid transparent;
+    -webkit-user-select:none;}
   .tab.active{background:rgba(61,220,151,.12);color:var(--accent);border-color:rgba(61,220,151,.4);}
-  main{flex:1;overflow-y:auto;padding:12px 14px 100px;}
+  main{flex:1;overflow-y:auto;padding:12px 14px 100px;-webkit-overflow-scrolling:touch;}
   .card{background:var(--panel);border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid #232838;}
   .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:0 0 10px;}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
@@ -55,8 +63,9 @@
   .gps-flag{font-size:11px;color:var(--muted);margin-top:6px;text-align:center;}
   .gps-flag.weak{color:var(--accent2);}
   footer{position:fixed;bottom:0;left:0;right:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
-    background:linear-gradient(180deg,transparent,var(--bg) 30%);display:flex;gap:10px;}
-  .btn{flex:1;padding:14px 6px;border-radius:12px;border:none;font-size:15px;font-weight:700;cursor:pointer;}
+    background:linear-gradient(180deg,transparent,var(--bg) 30%);display:flex;gap:10px;z-index:50;}
+  .btn{flex:1;padding:14px 6px;border-radius:12px;border:none;font-size:15px;font-weight:700;cursor:pointer;
+    -webkit-appearance:none;appearance:none;touch-action:manipulation;}
   .btn-start{background:var(--accent);color:#062017;}
   .btn-stop{background:var(--danger);color:#fff;}
   .btn-screen{background:var(--panel2);color:var(--text);flex:0 0 54px;font-size:20px;}
@@ -66,17 +75,28 @@
   #blackout.show{display:flex;}
   .toast{position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#1d2230;color:var(--text);
     padding:8px 14px;border-radius:20px;font-size:12px;z-index:1200;border:1px solid #2a2f3d;opacity:0;
-    transition:opacity .3s;pointer-events:none;}
+    transition:opacity .3s;pointer-events:none;max-width:88%;text-align:center;}
   .toast.show{opacity:1;}
   .help{font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px;}
 </style>
 </head>
 <body>
+<noscript>
+  <div style="padding:20px;background:#3a1d1d;color:#ffb3b3;font-family:sans-serif;">
+    JavaScript est désactivé ou n'a pas pu s'exécuter (aperçu de fichier au lieu d'un vrai onglet navigateur).
+    Ouvrez ce fichier directement dans Safari/Chrome (pas dans un aperçu Fichiers/Mail) pour que l'application fonctionne.
+  </div>
+</noscript>
 <div id="app">
   <header>
     <h1>🏃 PaceCoach</h1>
-    <span class="ver">v0.1</span>
+    <span class="ver">v0.2</span>
   </header>
+  <div id="noscript-banner">
+    ⚠️ Le script n'a pas pu s'initialiser correctement. Ouvrez ce fichier dans un vrai onglet Safari/Chrome
+    (et non dans un aperçu de Fichiers, Mail ou AirDrop) puis rechargez la page.
+  </div>
+  <div id="err-banner"></div>
 
   <div class="tabs">
     <div class="tab active" data-tab="hold">Tenue de vitesse</div>
@@ -90,8 +110,8 @@
       <div class="card">
         <h2>Unité</h2>
         <div class="unit-toggle">
-          <button id="unit-pace" class="active">min/km</button>
-          <button id="unit-kmh">km/h</button>
+          <button type="button" id="unit-pace" class="active">min/km</button>
+          <button type="button" id="unit-kmh">km/h</button>
         </div>
       </div>
       <div class="card">
@@ -112,17 +132,17 @@
       <div class="card">
         <h2>Unité annoncée</h2>
         <div class="unit-toggle">
-          <button id="unit-pace-l" class="active">min/km</button>
-          <button id="unit-kmh-l">km/h</button>
+          <button type="button" id="unit-pace-l" class="active">min/km</button>
+          <button type="button" id="unit-kmh-l">km/h</button>
         </div>
       </div>
       <div class="card">
         <h2>Fréquence des annonces</h2>
         <div class="freq-grid">
-          <button data-f="10" class="freq active">10 s</button>
-          <button data-f="15" class="freq">15 s</button>
-          <button data-f="20" class="freq">20 s</button>
-          <button data-f="30" class="freq">30 s</button>
+          <button type="button" data-f="10" class="freq active">10 s</button>
+          <button type="button" data-f="15" class="freq">15 s</button>
+          <button type="button" data-f="20" class="freq">20 s</button>
+          <button type="button" data-f="30" class="freq">30 s</button>
         </div>
         <p class="help">L'allure ou la vitesse courante est annoncée vocalement à l'intervalle choisi.</p>
       </div>
@@ -151,9 +171,9 @@
   </main>
 
   <footer>
-    <button class="btn btn-screen" id="btn-black" title="Écran noir">⏻</button>
-    <button class="btn btn-start" id="btn-start">Démarrer</button>
-    <button class="btn btn-stop" id="btn-stop" style="display:none">Arrêter</button>
+    <button type="button" class="btn btn-screen" id="btn-black" title="Écran noir">⏻</button>
+    <button type="button" class="btn btn-start" id="btn-start">Démarrer</button>
+    <button type="button" class="btn btn-stop" id="btn-stop" style="display:none">Arrêter</button>
   </footer>
 </div>
 
@@ -164,49 +184,11 @@
 <div class="toast" id="toast"></div>
 
 <script>
-(function(){
-  'use strict';
+// Marker flipped to true only once init() completes without a fatal error.
+window.__pacecoach_ready = false;
 
-  // ---------- State ----------
-  const state = {
-    mode: 'hold',                 // 'hold' | 'listen'
-    unitHold: 'pace',             // 'pace' | 'kmh'
-    unitListen: 'pace',
-    listenFreq: 10,
-    targetPaceSec: 5*60+30,       // seconds per km
-    running: false,
-    startTime: null,
-    pausedAccum: 0,
-    lastTickTime: null,
-    totalDistanceM: 0,
-    speedBuffer: [],              // recent {v, acc, t} for median/EMA filtering
-    emaSpeed: null,               // smoothed speed m/s
-    lastCoord: null,
-    path: [],                     // {lat, lon, t}
-    projOrigin: null,
-    currentStatus: 'idle',        // idle | ok | slow | fast
-    lastAnnounceElapsed: -9999,
-    lastAlertBeepTime: 0,
-    watchId: null,
-    wakeLock: null,
-    blackout: false,
-    stateCandidate: null,
-    stateCandidateCount: 0,
-    lowAccuracyStreak: 0
-  };
-
-  const MAX_RUN_SPEED = 8.5;      // m/s (~30.6 km/h) sanity clamp for a runner
-  const MIN_ACCEPTABLE_ACCURACY = 30; // meters
-  const HYSTERESIS_SEC = 15;      // s/km tolerance
-  const DEBOUNCE_SAMPLES = 3;     // consecutive samples needed to switch announced state
-  const EMA_ALPHA = 0.35;
-
-  // ---------- Helpers ----------
-  function fmtPace(secPerKm){
-    if(!isFinite(secPerKm) || secPerKm <= 0) return '--:--';
-    const m = Math.floor(secPerKm/60), s = Math.round(secPerKm%60);
-    return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
-  }
-  function fmtTime(totalSec){
-    const h = Math.floor(totalSec/3600), m = Math.floor((totalSec%3600)/60), s = Math.floor(totalSec%60);
-    return (h>0? String(h).padStart(2,'0')+':
+window.addEventListener('error', function(e){
+  try{
+    var b = document.getElementById('err-banner');
+    if(b){
+      b.classList.ad
