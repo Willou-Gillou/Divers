@@ -3,10 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
-<title>PaceCoach v0.4 — Contrôle de vitesse de course</title>
+<title>PaceCoach v0.5</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#161a22; --panel2:#1d2230; --accent:#3ddc97; --accent2:#ffb020;
@@ -22,21 +19,13 @@
   header h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.3px;}
   header .ver{font-size:11px;color:var(--muted);}
 
-  /* Bandeau visible PAR DEFAUT en CSS pur (pas de "display:none" initial).
-     Le script, dès sa toute première ligne exécutée, le masque via JS.
-     S'il reste visible => la preuve certaine que le JS n'a jamais tourné,
-     quelle qu'en soit la cause (réglage, Lockdown Mode, bloqueur de contenu). */
-  #js-guard{
-    display:block;background:#3a1d1d;color:#ffd0d0;padding:14px 16px;font-size:13px;
-    line-height:1.6;border-bottom:2px solid #ff4d4f;
-  }
-  #js-guard b{color:#fff;}
-  #js-guard ol{margin:8px 0 0;padding-left:20px;}
-  #js-guard li{margin-bottom:4px;}
-  html.js-ok #js-guard{display:none;}
+  #diag{background:#3a1d1d;color:#ffd0d0;padding:12px 14px;font-size:12px;line-height:1.6;
+    border-bottom:2px solid #ff4d4f;font-family:monospace;white-space:pre-wrap;word-break:break-word;}
+  #diag.ok{display:none;}
+  #diag b{color:#fff;}
 
   #err-banner{display:none;background:#3a2f0d;color:#ffe08a;padding:8px 14px;font-size:11px;
-    border-bottom:1px solid #5a4a1a;line-height:1.4;}
+    border-bottom:1px solid #5a4a1a;line-height:1.4;white-space:pre-wrap;word-break:break-word;}
   #err-banner.show{display:block;}
   #build-tag{font-size:10px;color:#4a5266;text-align:center;padding:3px 0;background:#0d0f14;}
   .tabs{display:flex;gap:6px;padding:8px 10px;background:var(--panel);}
@@ -50,7 +39,7 @@
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
   .row + .row{margin-top:10px;}
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px;}
-  input[type=number], select{
+  input[type=number]{
     background:#0d0f14;border:1px solid #2a2f3d;color:var(--text);border-radius:8px;
     padding:9px 10px;font-size:15px;width:100%;
   }
@@ -59,9 +48,9 @@
     border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;}
   .unit-toggle button.active{background:var(--accent);color:#062017;}
   .freq-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
-  .freq-grid button, .chip{padding:9px 4px;border-radius:8px;border:1px solid #2a2f3d;background:#0d0f14;
+  .freq-grid button{padding:9px 4px;border-radius:8px;border:1px solid #2a2f3d;background:#0d0f14;
     color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;}
-  .freq-grid button.active, .chip.active{background:rgba(61,220,151,.15);color:var(--accent);border-color:var(--accent);}
+  .freq-grid button.active{background:rgba(61,220,151,.15);color:var(--accent);border-color:var(--accent);}
   .big-display{text-align:center;padding:18px 6px;}
   .big-display .pace{font-size:56px;font-weight:800;letter-spacing:1px;line-height:1;}
   .big-display .sub{font-size:14px;color:var(--muted);margin-top:6px;}
@@ -97,45 +86,55 @@
 </head>
 <body>
 
-<!-- Ce bandeau est visible par défaut (CSS pur). La première instruction du
-     script le masque. S'il reste affiché, le JavaScript n'a jamais démarré. -->
-<div id="js-guard">
-  <b>⚠️ JavaScript ne s'exécute pas sur cette page.</b>
-  Sur iPhone, vérifiez dans l'ordre :
-  <ol>
-    <li>Réglages → Apps → Safari → Avancé → activez <b>JavaScript</b>.</li>
-    <li>Si le <b>Mode Isolement</b> (Lockdown Mode) est activé : ouvrez le menu "aA" dans la barre d'adresse Safari → Réglages du site → désactivez le Mode Isolement pour ce site.</li>
-    <li>Si vous utilisez un bloqueur de contenu (AdGuard, 1Blocker, Wipr...) : désactivez-le temporairement pour ce site.</li>
-    <li>Essayez en navigation privée pour écarter toute extension.</li>
-  </ol>
+<!-- DIAGNOSTIC : ce bloc est visible par defaut en CSS pur.
+     Script A (immediatement ci-dessous, ultra minimal, ASCII uniquement)
+     doit reussir a le remplir avec des vraies infos meme si tout le reste casse.
+     S'il reste affiche avec "ETAPE A: NON EXECUTEE", aucun JS ne tourne du tout.
+     S'il affiche "ETAPE A: OK" mais "ETAPE B: NON EXECUTEE", alors Script A a
+     reussi mais le bloc de logique principal (Script B) a une erreur de syntaxe
+     qui empeche tout son contenu de s'executer (montre l'erreur si capturee). -->
+<div id="diag">
+<b>DIAGNOSTIC PACECOACH</b>
+Etape A (script minimal) : <span id="diag-a">NON EXECUTEE</span>
+Etape B (logique app)    : <span id="diag-b">NON EXECUTEE</span>
+Erreur capturee          : <span id="diag-err">aucune</span>
+Navigateur                : <span id="diag-ua">-</span>
+Encodage document          : <span id="diag-charset">-</span>
 </div>
+
+<script>
+try{
+  document.getElementById('diag-a').textContent = 'OK';
+  document.getElementById('diag-ua').textContent = navigator.userAgent;
+  document.getElementById('diag-charset').textContent = document.characterSet;
+}catch(e){}
+</script>
 
 <div id="app">
   <header>
-    <h1>🏃 PaceCoach</h1>
-    <span class="ver">v0.4</span>
+    <h1>PaceCoach</h1>
+    <span class="ver">v0.5</span>
   </header>
   <div id="build-tag"></div>
   <div id="err-banner"></div>
 
   <div class="tabs" id="tabs">
     <div class="tab active" data-tab="hold">Tenue de vitesse</div>
-    <div class="tab" data-tab="listen">Écoute de vitesse</div>
+    <div class="tab" data-tab="listen">Ecoute de vitesse</div>
     <div class="tab" data-tab="run">Course</div>
   </div>
 
   <main>
-    <!-- PANEL: HOLD MODE CONFIG -->
     <section id="panel-hold" class="panel">
       <div class="card">
-        <h2>Unité</h2>
+        <h2>Unite</h2>
         <div class="unit-toggle">
           <button type="button" id="unit-pace" class="active" data-action="unit-hold-pace">min/km</button>
           <button type="button" id="unit-kmh" data-action="unit-hold-kmh">km/h</button>
         </div>
       </div>
       <div class="card">
-        <h2>Allure / vitesse à tenir</h2>
+        <h2>Allure / vitesse a tenir</h2>
         <div class="row" id="hold-pace-row">
           <div style="flex:1"><label>Minutes</label><input type="number" id="hold-min" min="2" max="15" value="5"></div>
           <div style="flex:1"><label>Secondes</label><input type="number" id="hold-sec" min="0" max="59" value="30"></div>
@@ -143,39 +142,41 @@
         <div class="row" id="hold-kmh-row" style="display:none">
           <div style="flex:1"><label>Vitesse (km/h)</label><input type="number" id="hold-kmh-val" min="3" max="25" step="0.1" value="11.0"></div>
         </div>
-        <p class="help">Tolérance fixe : ±15 s/km. En dessous → « trop lent » + bip toutes les 5 s. Au-dessus → « trop vite » + bip toutes les 5 s. Dans la fenêtre → « allure stabilisée ».</p>
+        <p class="help" id="help-hold">Tolerance fixe : plus ou moins 15 s/km. En dessous : alerte "trop lent" et bip toutes les 5 s. Au-dessus : alerte "trop vite" et bip toutes les 5 s. Dans la fenetre : "allure stabilisee".</p>
       </div>
     </section>
 
-    <!-- PANEL: LISTEN MODE CONFIG -->
     <section id="panel-listen" class="panel" style="display:none">
       <div class="card">
-        <h2>Unité annoncée</h2>
+        <h2>Unite annoncee</h2>
         <div class="unit-toggle">
           <button type="button" id="unit-pace-l" class="active" data-action="unit-listen-pace">min/km</button>
           <button type="button" id="unit-kmh-l" data-action="unit-listen-kmh">km/h</button>
         </div>
       </div>
       <div class="card">
-        <h2>Fréquence des annonces</h2>
+        <h2>Frequence des annonces</h2>
         <div class="freq-grid" id="freq-grid">
           <button type="button" data-f="10" class="freq active" data-action="freq">10 s</button>
           <button type="button" data-f="15" class="freq" data-action="freq">15 s</button>
           <button type="button" data-f="20" class="freq" data-action="freq">20 s</button>
           <button type="button" data-f="30" class="freq" data-action="freq">30 s</button>
         </div>
-        <p class="help">L'allure ou la vitesse courante est annoncée vocalement à l'intervalle choisi.</p>
+        <p class="help">L'allure ou la vitesse courante est annoncee vocalement a l'intervalle choisi.</p>
       </div>
     </section>
 
-    <!-- PANEL: RUN / LIVE -->
     <section id="panel-run" class="panel" style="display:none">
       <div class="card big-display">
         <div class="pace" id="live-pace">--:--</div>
-        <div class="sub" id="live-sub">min/km · en attente de GPS</div>
-        <div class="status-banner" id="status-banner">Prêt</div>
+        <div class="sub" id="live-sub">min/km - en attente de GPS</div>
+        <div class="status-banner" id="status-banner">Pret</div>
         <div class="gps-flag" id="gps-flag"></div>
       </div>
       <div class="card">
         <div class="metrics">
-          <div><div class="v" id="m-dist">0.00</
+          <div><div class="v" id="m-dist">0.00</div><div class="l">km</div></div>
+          <div><div class="v" id="m-time">00:00</div><div class="l">duree</div></div>
+          <div><div class="v" id="m-avg">--:--</div><div class="l">allure moy.</div></div>
+        </div>
+   
