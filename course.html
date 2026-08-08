@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>PaceCoach v1.2</title>
+<title>PaceCoach v1.3</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root{
@@ -63,7 +63,13 @@
   .metrics div{background:#0d0f14;border-radius:10px;padding:8px 4px;}
   .metrics .v{font-size:17px;font-weight:700;}
   .metrics .l{font-size:10px;color:var(--muted);text-transform:uppercase;}
-  .gps-flag{font-size:11px;color:var(--muted);margin-top:6px;text-align:center;}
+  .gps-flag-row{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px;}
+  .gps-icon{width:10px;height:10px;border-radius:50%;background:#4a5266;flex:0 0 10px;
+    box-shadow:0 0 0 3px rgba(255,255,255,0.03);}
+  .gps-icon.green{background:#3ddc97;box-shadow:0 0 6px rgba(61,220,151,0.7);}
+  .gps-icon.orange{background:#ffb020;box-shadow:0 0 6px rgba(255,176,32,0.7);}
+  .gps-icon.red{background:#ff4d4f;box-shadow:0 0 6px rgba(255,77,79,0.7);}
+  .gps-flag{font-size:11px;color:var(--muted);text-align:center;}
   .gps-flag.weak{color:var(--accent2);}
 
   .mode-switch{display:flex;gap:6px;}
@@ -85,7 +91,10 @@
   .history-item{background:#0d0f14;border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;
     border:1px solid #2a2f3d;}
   .history-item:last-child{margin-bottom:0;}
-  .hi-name{font-size:13px;font-weight:600;color:var(--text);}
+  .hi-top-row{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .hi-name{font-size:13px;font-weight:600;color:var(--text);flex:1;}
+  .hi-rename-btn{background:var(--panel2);color:var(--muted);border:none;border-radius:8px;
+    padding:5px 9px;font-size:10px;cursor:pointer;white-space:nowrap;flex:0 0 auto;}
   .hi-meta{font-size:11px;color:var(--muted);margin-top:3px;}
 
   footer{position:fixed;bottom:0;left:0;right:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
@@ -109,7 +118,7 @@
 <body>
 
 <div id="diag">
-<b>DIAGNOSTIC PACECOACH v1.2</b>
+<b>DIAGNOSTIC PACECOACH v1.3</b>
 Etape A (script minimal)   : <span id="diag-a">NON EXECUTEE</span>
 Etape B (script principal) : <span id="diag-c">NON EXECUTEE</span>
 Erreur capturee            : <span id="diag-err">aucune</span>
@@ -128,7 +137,7 @@ try{
 <div id="app">
   <header>
     <h1>PaceCoach</h1>
-    <span class="ver">v1.2</span>
+    <span class="ver">v1.3</span>
   </header>
   <div id="build-tag"></div>
   <div id="err-banner"></div>
@@ -142,7 +151,10 @@ try{
         </div>
         <div class="sub" id="live-sub">min/km - en attente de GPS</div>
         <div class="status-banner" id="status-banner">Pret</div>
-        <div class="gps-flag" id="gps-flag"></div>
+        <div class="gps-flag-row">
+          <span class="gps-icon" id="gps-icon"></span>
+          <span class="gps-flag" id="gps-flag"></span>
+        </div>
       </div>
 
       <div class="card">
@@ -229,8 +241,8 @@ try{
   </footer>
 </div>
 
-<div id="blackout" data-action="blackout-close">
-  <div id="blackout-info">Ecran eteint - appuyer pour revenir</div>
+<div id="blackout" data-action="blackout-tap">
+  <div id="blackout-info">Ecran eteint - appuyez 3 fois rapidement pour revenir</div>
   <div class="pulse" id="blackout-status">.</div>
 </div>
 <div class="toast" id="toast"></div>
@@ -281,17 +293,21 @@ try {
   state.currentStatus = "idle";
   state.lastAnnounceElapsed = -9999;
   state.lastAlertBeepTime = 0;
-  state.watchId = null;
+  state.ambientWatchId = null;
   state.wakeLock = null;
   state.blackout = false;
+  state.blackoutTapTimestamps = [];
   state.stateCandidate = null;
   state.stateCandidateCount = 0;
   state.gpsState = "idle";
   state.mapReady = false;
   state.ghostRecord = null;
   state.lastGhostAnnounceElapsed = -9999;
+  state.ambientErrorNotified = false;
+  state.currentViewedHistoryId = null;
 
   var MAX_RUN_SPEED = 8.5;
+  var GOOD_ACCURACY = 20;
   var MIN_ACCEPTABLE_ACCURACY = 30;
   var WEAK_ACCEPTABLE_ACCURACY = 60;
   var HYSTERESIS_SEC = 15;
@@ -303,6 +319,8 @@ try {
   var HISTORY_KEY = "pacecoach_history";
   var MIN_SAVE_DISTANCE_M = 50;
   var MAX_HISTORY = 30;
+  var BLACKOUT_TAP_WINDOW_MS = 1200;
+  var BLACKOUT_TAPS_NEEDED = 3;
 
   function byId(id) {
     return document.getElementById(id);
@@ -594,6 +612,32 @@ try {
     } catch (e) {}
   }
 
+  function renameHistoryRun(idVal) {
+    try {
+      var hist = loadHistory();
+      var rec = null;
+      var i = 0;
+      while (i < hist.length) {
+        if (String(hist[i].id) === String(idVal)) { rec = hist[i]; break; }
+        i = i + 1;
+      }
+      if (!rec) { return; }
+      var newName = window.prompt("Nouveau nom de la course :", rec.name);
+      if (newName === null) { return; }
+      var trimmed = newName.replace(/^\s+|\s+$/g, "");
+      if (trimmed.length === 0) { return; }
+      rec.name = trimmed;
+      saveHistory(hist);
+      renderHistoryList();
+      renderGhostSelect();
+      if (state.currentViewedHistoryId !== null && String(state.currentViewedHistoryId) === String(idVal)) {
+        var title = byId("history-view-title");
+        if (title) { title.textContent = trimmed; }
+      }
+      showToast("Course renommee");
+    } catch (e) {}
+  }
+
   function renderHistoryList() {
     try {
       var list = byId("history-list");
@@ -615,14 +659,30 @@ try {
         item.className = "history-item";
         item.setAttribute("data-action", "view-history");
         item.setAttribute("data-id", String(rec.id));
+
+        var topRow = document.createElement("div");
+        topRow.className = "hi-top-row";
+
         var nameEl = document.createElement("div");
         nameEl.className = "hi-name";
         nameEl.textContent = rec.name;
+
+        var renameBtn = document.createElement("button");
+        renameBtn.type = "button";
+        renameBtn.className = "hi-rename-btn";
+        renameBtn.setAttribute("data-action", "rename-history");
+        renameBtn.setAttribute("data-id", String(rec.id));
+        renameBtn.textContent = "Renommer";
+
+        topRow.appendChild(nameEl);
+        topRow.appendChild(renameBtn);
+
         var metaEl = document.createElement("div");
         metaEl.className = "hi-meta";
         var distKm = (rec.distanceM / 1000).toFixed(2);
         metaEl.textContent = distKm + " km - " + fmtTime(rec.durationSec);
-        item.appendChild(nameEl);
+
+        item.appendChild(topRow);
         item.appendChild(metaEl);
         list.appendChild(item);
         i = i + 1;
@@ -775,9 +835,9 @@ try {
       if (!state.mapReady || !lmap) { return; }
       var latLng = [lat, lon];
       if (lmarker) { lmarker.setLatLng(latLng); }
-      if (lpolyline) { lpolyline.addLatLng(latLng); }
+      if (state.running && lpolyline) { lpolyline.addLatLng(latLng); }
 
-      if (state.mode === "ghost" && state.ghostRecord) {
+      if (state.running && state.mode === "ghost" && state.ghostRecord) {
         var g = ghostLatLonAtDistance(state.ghostRecord, state.totalDistanceM);
         if (!lGhostMarker) {
           lGhostMarker = L.circleMarker([g.lat, g.lon], {
@@ -818,6 +878,7 @@ try {
       lHistoryPolyline = L.polyline(latlngs, { color: "#4da3ff", weight: 4, opacity: 0.85, dashArray: "6 6" }).addTo(lmap);
       lmap.fitBounds(lHistoryPolyline.getBounds(), { padding: [20, 20] });
 
+      state.currentViewedHistoryId = rec.id;
       var panel = byId("history-view-panel");
       var title = byId("history-view-title");
       var meta = byId("history-view-meta");
@@ -836,9 +897,16 @@ try {
         lmap.removeLayer(lHistoryPolyline);
         lHistoryPolyline = null;
       }
+      state.currentViewedHistoryId = null;
       var panel = byId("history-view-panel");
       if (panel) { panel.style.display = "none"; }
     } catch (e) {}
+  }
+
+  function setGpsIcon(tier) {
+    var icon = byId("gps-icon");
+    if (!icon) { return; }
+    icon.className = "gps-icon " + tier;
   }
 
   function updateGpsFlag(text, cls) {
@@ -846,6 +914,22 @@ try {
     if (gf) {
       gf.textContent = text;
       gf.className = "gps-flag" + (cls ? " " + cls : "");
+    }
+  }
+
+  function updateSignalFromAccuracy(accuracy) {
+    if (accuracy <= GOOD_ACCURACY) {
+      setGpsIcon("green");
+      state.gpsState = "fixed";
+      updateGpsFlag("Position fixee - precision: " + Math.round(accuracy) + " m", "");
+    } else if (accuracy <= WEAK_ACCEPTABLE_ACCURACY) {
+      setGpsIcon("orange");
+      state.gpsState = "weak";
+      updateGpsFlag("Signal moyen - precision: " + Math.round(accuracy) + " m", "weak");
+    } else {
+      setGpsIcon("red");
+      state.gpsState = "searching";
+      updateGpsFlag("Signal faible - precision: " + Math.round(accuracy) + " m", "weak");
     }
   }
 
@@ -858,16 +942,7 @@ try {
       var t = pos.timestamp;
 
       if (accuracy > WEAK_ACCEPTABLE_ACCURACY) {
-        state.gpsState = "searching";
-        updateGpsFlag("Recherche GPS - precision actuelle: " + Math.round(accuracy) + " m", "weak");
         return;
-      }
-      if (accuracy > MIN_ACCEPTABLE_ACCURACY) {
-        state.gpsState = "weak";
-        updateGpsFlag("Signal faible - precision: " + Math.round(accuracy) + " m", "weak");
-      } else {
-        state.gpsState = "fixed";
-        updateGpsFlag("Position fixee - precision: " + Math.round(accuracy) + " m", "");
       }
 
       state.lastCoord = { lat: lat, lon: lon, t: t };
@@ -900,8 +975,6 @@ try {
 
       state.path.push({ lat: lat, lon: lon, t: t });
       if (state.path.length > 2000) { state.path.shift(); }
-
-      updateMapPosition(lat, lon);
 
       if (instSpeed === null) { return; }
       if (instSpeed > MAX_RUN_SPEED || instSpeed < 0) { return; }
@@ -936,23 +1009,55 @@ try {
     } catch (e) {}
   }
 
-  function geoError(err) {
+  function onAmbientPosition(pos) {
+    try {
+      var accuracy = pos.coords.accuracy;
+      updateSignalFromAccuracy(accuracy);
+      updateMapPosition(pos.coords.latitude, pos.coords.longitude);
+      if (state.running) {
+        processPosition(pos);
+      }
+    } catch (e) {}
+  }
+
+  function onAmbientError(err) {
     var code = err ? err.code : 0;
     var msg = "Erreur GPS inconnue";
     if (code === 1) {
       msg = "Acces a la position refuse. Autorisez la localisation pour ce site dans les reglages du navigateur.";
-      state.gpsState = "denied";
     } else if (code === 2) {
       msg = "Position indisponible. Verifiez que vous etes a l exterieur ou que le GPS est active.";
-      state.gpsState = "error";
     } else if (code === 3) {
       msg = "Recherche du signal GPS en cours...";
-      state.gpsState = "searching";
     }
+    setGpsIcon("red");
     updateGpsFlag(msg, "weak");
-    if (code === 1 || code === 2) {
+    if ((code === 1 || code === 2) && !state.ambientErrorNotified) {
+      state.ambientErrorNotified = true;
       showToast(msg, 4000);
     }
+  }
+
+  function startAmbientGps() {
+    try {
+      if (!("geolocation" in navigator)) {
+        setGpsIcon("red");
+        updateGpsFlag("Geolocalisation indisponible sur cet appareil", "weak");
+        return;
+      }
+      setGpsIcon("orange");
+      updateGpsFlag("Initialisation du GPS...", "weak");
+      navigator.geolocation.getCurrentPosition(onAmbientPosition, onAmbientError, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 20000
+      });
+      state.ambientWatchId = navigator.geolocation.watchPosition(onAmbientPosition, onAmbientError, {
+        enableHighAccuracy: true,
+        maximumAge: 1000,
+        timeout: 20000
+      });
+    } catch (e) {}
   }
 
   function elapsedSeconds() {
@@ -1113,10 +1218,6 @@ try {
 
   function doStart() {
     try {
-      if (!("geolocation" in navigator)) {
-        showToast("Geolocalisation indisponible sur cet appareil");
-        return;
-      }
       ensureAudio();
       readTargetFromInputs();
       state.running = true;
@@ -1134,7 +1235,6 @@ try {
       state.lastAnnounceElapsed = -9999;
       state.lastAlertBeepTime = 0;
       state.lastGhostAnnounceElapsed = -9999;
-      state.gpsState = "searching";
       lHasCentered = false;
       if (lpolyline) {
         try { lpolyline.setLatLngs([]); } catch (e2) {}
@@ -1148,22 +1248,10 @@ try {
       var bStop = byId("btn-stop");
       if (bStart) { bStart.style.display = "none"; }
       if (bStop) { bStop.style.display = "block"; }
-      setBanner("", "Recherche GPS...");
-      updateGpsFlag("Recherche du signal GPS...", "weak");
+      setBanner("", "Suivi en cours...");
 
       requestWakeLock();
 
-      navigator.geolocation.getCurrentPosition(processPosition, geoError, {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 20000
-      });
-
-      state.watchId = navigator.geolocation.watchPosition(processPosition, geoError, {
-        enableHighAccuracy: true,
-        maximumAge: 1000,
-        timeout: 20000
-      });
       loopHandle = setInterval(tick, 1000);
       if (state.mode === "hold") {
         speak("Mode tenue de vitesse activ\u00e9");
@@ -1180,9 +1268,6 @@ try {
   function doStop() {
     try {
       state.running = false;
-      if (state.watchId !== null && state.watchId !== undefined) {
-        navigator.geolocation.clearWatch(state.watchId);
-      }
       if (loopHandle) { clearInterval(loopHandle); }
       if (state.wakeLock) {
         state.wakeLock.release().then(function () {}, function () {});
@@ -1198,29 +1283,42 @@ try {
     } catch (e) {}
   }
 
-  function doBlackoutToggle() {
-    state.blackout = !state.blackout;
+  function doBlackoutOpen() {
+    state.blackout = true;
+    state.blackoutTapTimestamps = [];
     var bo = byId("blackout");
-    if (bo) {
-      if (state.blackout) {
-        bo.className = "show";
-      } else {
-        bo.className = "";
-      }
-    }
+    if (bo) { bo.className = "show"; }
   }
 
   function doBlackoutClose() {
     state.blackout = false;
+    state.blackoutTapTimestamps = [];
     var bo = byId("blackout");
     if (bo) { bo.className = ""; }
+  }
+
+  function handleBlackoutTap() {
+    var nowT = Date.now();
+    state.blackoutTapTimestamps.push(nowT);
+    var kept = [];
+    var i = 0;
+    while (i < state.blackoutTapTimestamps.length) {
+      if (nowT - state.blackoutTapTimestamps[i] <= BLACKOUT_TAP_WINDOW_MS) {
+        kept.push(state.blackoutTapTimestamps[i]);
+      }
+      i = i + 1;
+    }
+    state.blackoutTapTimestamps = kept;
+    if (state.blackoutTapTimestamps.length >= BLACKOUT_TAPS_NEEDED) {
+      doBlackoutClose();
+    }
   }
 
   function handleAction(action, el) {
     if (action === "start") { doStart(); return; }
     if (action === "stop") { doStop(); return; }
-    if (action === "blackout") { doBlackoutToggle(); return; }
-    if (action === "blackout-close") { doBlackoutClose(); return; }
+    if (action === "blackout") { doBlackoutOpen(); return; }
+    if (action === "blackout-tap") { handleBlackoutTap(); return; }
     if (action === "mode-hold") { selectMode("hold"); return; }
     if (action === "mode-listen") { selectMode("listen"); return; }
     if (action === "mode-ghost") { selectMode("ghost"); return; }
@@ -1228,6 +1326,11 @@ try {
     if (action === "view-history") {
       var id = el.getAttribute("data-id");
       viewHistoryRun(id);
+      return;
+    }
+    if (action === "rename-history") {
+      var idr = el.getAttribute("data-id");
+      renameHistoryRun(idr);
       return;
     }
     if (action === "close-history-view") { closeHistoryView(); return; }
@@ -1293,6 +1396,7 @@ try {
 
   initLeafletMap();
   renderHistoryList();
+  startAmbientGps();
 
   window.PC_STEP_C = "OK";
   var diagC = document.getElementById("diag-c");
