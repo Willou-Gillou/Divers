@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>PaceCoach v1.5</title>
+<title>PaceCoach v1.6</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root{
@@ -120,7 +120,7 @@
 <body>
 
 <div id="diag">
-<b>DIAGNOSTIC PACECOACH v1.5</b>
+<b>DIAGNOSTIC PACECOACH v1.6</b>
 Etape A (script minimal)   : <span id="diag-a">NON EXECUTEE</span>
 Etape B (script principal) : <span id="diag-c">NON EXECUTEE</span>
 Erreur capturee            : <span id="diag-err">aucune</span>
@@ -139,7 +139,7 @@ try{
 <div id="app">
   <header>
     <h1>PaceCoach</h1>
-    <span class="ver">v1.5</span>
+    <span class="ver">v1.6</span>
   </header>
   <div id="build-tag"></div>
   <div id="err-banner"></div>
@@ -319,7 +319,7 @@ try {
   var STEP_MIN = 3;
   var STEP_MAX = 12;
   var STEP_ACC_FACTOR = 0.5;
-  var ANCHOR_TIMEOUT_MS = 8000;
+  var ANCHOR_STOP_MS = 5000;
   var HYSTERESIS_SEC = 15;
   var DEBOUNCE_SAMPLES = 3;
   var MEDIAN_WINDOW = 6;
@@ -990,15 +990,14 @@ try {
     }
   }
 
-  /* Algorithme de vitesse "anchor-gate" :
-     un point d'ancrage fixe est conserve tant que le mobile ne s'est pas
-     deplace au-dela d'un seuil (proportionnel a la precision GPS courante,
-     borne entre 3 et 12 m). Seul un deplacement reel au-dela de ce seuil
-     declenche un nouveau calcul de vitesse (distance parcourue depuis
-     l'ancre / temps ecoule), puis l'ancre est repositionnee. Cela elimine
-     le bruit GPS de faible amplitude (le "jitter" typique en position
-     stationnaire ou a vitesse lente) qui provoquait des vitesses fausses,
-     sans sacrifier la reactivite a un vrai changement d'allure. */
+  /* Algorithme de vitesse "anchor-gate" avec detection explicite d'arret :
+     un point d'ancrage est conserve tant qu'aucun deplacement significatif
+     (seuil adapte a la precision GPS, 3 a 12 m) n'est detecte. Si ce seuil
+     n'est jamais franchi pendant ANCHOR_STOP_MS (5 s), on considere que
+     l'utilisateur est reellement a l'arret : la vitesse est alors forcee a
+     zero (et le tampon de lissage vide) plutot que de recalculer une fausse
+     vitesse a partir du bruit GPS residuel, ce qui empechait auparavant
+     l'affichage de redescendre a 0 a l'arret complet. */
   function updateSpeedAnchor(lat, lon, t, accuracy) {
     if (accuracy > SPEED_REJECT_ACCURACY) { return; }
 
@@ -1012,7 +1011,12 @@ try {
     var worstAcc = Math.max(accuracy, state.speedAnchor.acc);
     var threshold = stepThresholdFor(worstAcc);
 
-    if (d < threshold && dtMs <= ANCHOR_TIMEOUT_MS) {
+    if (d < threshold) {
+      if (dtMs > ANCHOR_STOP_MS) {
+        state.emaSpeed = 0;
+        state.speedBuffer = [];
+        state.speedAnchor = { lat: lat, lon: lon, t: t, acc: accuracy };
+      }
       return;
     }
 
