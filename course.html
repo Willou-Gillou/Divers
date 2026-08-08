@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>PaceCoach v1.3</title>
+<title>PaceCoach v1.4</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root{
@@ -91,10 +91,12 @@
   .history-item{background:#0d0f14;border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;
     border:1px solid #2a2f3d;}
   .history-item:last-child{margin-bottom:0;}
-  .hi-top-row{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .hi-top-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
   .hi-name{font-size:13px;font-weight:600;color:var(--text);flex:1;}
-  .hi-rename-btn{background:var(--panel2);color:var(--muted);border:none;border-radius:8px;
+  .hi-btn-group{display:flex;gap:6px;flex:0 0 auto;}
+  .hi-rename-btn, .hi-delete-btn{background:var(--panel2);color:var(--muted);border:none;border-radius:8px;
     padding:5px 9px;font-size:10px;cursor:pointer;white-space:nowrap;flex:0 0 auto;}
+  .hi-delete-btn{color:var(--danger);}
   .hi-meta{font-size:11px;color:var(--muted);margin-top:3px;}
 
   footer{position:fixed;bottom:0;left:0;right:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
@@ -118,7 +120,7 @@
 <body>
 
 <div id="diag">
-<b>DIAGNOSTIC PACECOACH v1.3</b>
+<b>DIAGNOSTIC PACECOACH v1.4</b>
 Etape A (script minimal)   : <span id="diag-a">NON EXECUTEE</span>
 Etape B (script principal) : <span id="diag-c">NON EXECUTEE</span>
 Erreur capturee            : <span id="diag-err">aucune</span>
@@ -137,7 +139,7 @@ try{
 <div id="app">
   <header>
     <h1>PaceCoach</h1>
-    <span class="ver">v1.3</span>
+    <span class="ver">v1.4</span>
   </header>
   <div id="build-tag"></div>
   <div id="err-banner"></div>
@@ -181,11 +183,11 @@ try{
           <button type="button" id="unit-kmh" data-action="unit-hold-kmh">km/h</button>
         </div>
         <div class="row" id="hold-pace-row" style="margin-top:10px">
-          <div style="flex:1"><label>Minutes</label><input type="number" id="hold-min" min="2" max="15" value="5"></div>
-          <div style="flex:1"><label>Secondes</label><input type="number" id="hold-sec" min="0" max="59" value="30"></div>
+          <div style="flex:1"><label>Minutes</label><input type="number" id="hold-min" min="2" max="15" value="5" autocomplete="off"></div>
+          <div style="flex:1"><label>Secondes</label><input type="number" id="hold-sec" min="0" max="59" value="30" autocomplete="off"></div>
         </div>
         <div class="row" id="hold-kmh-row" style="display:none;margin-top:10px">
-          <div style="flex:1"><label>Vitesse (km/h)</label><input type="number" id="hold-kmh-val" min="3" max="25" step="0.1" value="11.0"></div>
+          <div style="flex:1"><label>Vitesse (km/h)</label><input type="number" id="hold-kmh-val" min="3" max="25" step="0.1" value="11.0" autocomplete="off"></div>
         </div>
         <p class="help">Tolerance fixe : plus ou moins 15 secondes par km. Le bouton SET ci-dessus permet de fixer instantanement l'allure cible sur votre allure actuelle. Modifiable a tout moment, meme pendant la course.</p>
       </div>
@@ -209,7 +211,7 @@ try{
       <div class="card" id="settings-ghost" style="display:none">
         <h2>Reglages - Challenge fantome</h2>
         <p class="help" id="ghost-none-msg" style="display:none">Aucune course enregistree pour le moment. Terminez une course dans un autre mode pour pouvoir la choisir ensuite comme fantome.</p>
-        <select id="ghost-select"></select>
+        <select id="ghost-select" autocomplete="off"></select>
         <p class="help">Votre position et celle du fantome (course passee selectionnee) s'affichent superposees sur la carte. L'ecart de temps ("en avance de..." / "en retard de...") est annonce vocalement toutes les 30 secondes.</p>
       </div>
 
@@ -302,9 +304,11 @@ try {
   state.gpsState = "idle";
   state.mapReady = false;
   state.ghostRecord = null;
+  state.ghostRecordId = null;
   state.lastGhostAnnounceElapsed = -9999;
   state.ambientErrorNotified = false;
   state.currentViewedHistoryId = null;
+  state.lastMapUpdateTime = 0;
 
   var MAX_RUN_SPEED = 8.5;
   var GOOD_ACCURACY = 20;
@@ -314,13 +318,15 @@ try {
   var DEBOUNCE_SAMPLES = 3;
   var MEDIAN_WINDOW = 7;
   var MAX_ACCEL = 3.2;
-  var WINDOW_MS = 3000;
+  var WINDOW_MS = 4000;
   var GHOST_ANNOUNCE_SEC = 30;
   var HISTORY_KEY = "pacecoach_history";
   var MIN_SAVE_DISTANCE_M = 50;
   var MAX_HISTORY = 30;
   var BLACKOUT_TAP_WINDOW_MS = 1200;
   var BLACKOUT_TAPS_NEEDED = 3;
+  var MAP_UPDATE_MIN_MS_IDLE = 3000;
+  var MAP_UPDATE_MIN_MS_RUNNING = 1000;
 
   function byId(id) {
     return document.getElementById(id);
@@ -638,6 +644,34 @@ try {
     } catch (e) {}
   }
 
+  function deleteHistoryRun(idVal) {
+    try {
+      var hist = loadHistory();
+      var rec = null;
+      var idx = -1;
+      var i = 0;
+      while (i < hist.length) {
+        if (String(hist[i].id) === String(idVal)) { rec = hist[i]; idx = i; break; }
+        i = i + 1;
+      }
+      if (!rec) { return; }
+      var ok = window.confirm("Supprimer definitivement \"" + rec.name + "\" ?");
+      if (!ok) { return; }
+      hist.splice(idx, 1);
+      saveHistory(hist);
+      renderHistoryList();
+      renderGhostSelect();
+      if (state.currentViewedHistoryId !== null && String(state.currentViewedHistoryId) === String(idVal)) {
+        closeHistoryView();
+      }
+      if (state.ghostRecordId !== null && String(state.ghostRecordId) === String(idVal)) {
+        state.ghostRecord = null;
+        state.ghostRecordId = null;
+      }
+      showToast("Course supprimee");
+    } catch (e) {}
+  }
+
   function renderHistoryList() {
     try {
       var list = byId("history-list");
@@ -667,6 +701,9 @@ try {
         nameEl.className = "hi-name";
         nameEl.textContent = rec.name;
 
+        var btnGroup = document.createElement("div");
+        btnGroup.className = "hi-btn-group";
+
         var renameBtn = document.createElement("button");
         renameBtn.type = "button";
         renameBtn.className = "hi-rename-btn";
@@ -674,8 +711,18 @@ try {
         renameBtn.setAttribute("data-id", String(rec.id));
         renameBtn.textContent = "Renommer";
 
+        var deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "hi-delete-btn";
+        deleteBtn.setAttribute("data-action", "delete-history");
+        deleteBtn.setAttribute("data-id", String(rec.id));
+        deleteBtn.textContent = "Supprimer";
+
+        btnGroup.appendChild(renameBtn);
+        btnGroup.appendChild(deleteBtn);
+
         topRow.appendChild(nameEl);
-        topRow.appendChild(renameBtn);
+        topRow.appendChild(btnGroup);
 
         var metaEl = document.createElement("div");
         metaEl.className = "hi-meta";
@@ -772,18 +819,20 @@ try {
   }
 
   function loadGhostByIdValue(idVal) {
-    if (!idVal) { state.ghostRecord = null; return; }
+    if (!idVal) { state.ghostRecord = null; state.ghostRecordId = null; return; }
     var hist = loadHistory();
     var i = 0;
     while (i < hist.length) {
       if (String(hist[i].id) === String(idVal)) {
         state.ghostRecord = buildGhostProfile(hist[i]);
+        state.ghostRecordId = hist[i].id;
         showToast("Fantome charge: " + hist[i].name);
         return;
       }
       i = i + 1;
     }
     state.ghostRecord = null;
+    state.ghostRecordId = null;
   }
 
   var lmap = null;
@@ -833,6 +882,11 @@ try {
   function updateMapPosition(lat, lon) {
     try {
       if (!state.mapReady || !lmap) { return; }
+      var nowMs = Date.now();
+      var minGap = state.running ? MAP_UPDATE_MIN_MS_RUNNING : MAP_UPDATE_MIN_MS_IDLE;
+      if (nowMs - state.lastMapUpdateTime < minGap) { return; }
+      state.lastMapUpdateTime = nowMs;
+
       var latLng = [lat, lon];
       if (lmarker) { lmarker.setLatLng(latLng); }
       if (state.running && lpolyline) { lpolyline.addLatLng(latLng); }
@@ -937,7 +991,6 @@ try {
     try {
       var lat = pos.coords.latitude;
       var lon = pos.coords.longitude;
-      var speedRaw = pos.coords.speed;
       var accuracy = pos.coords.accuracy;
       var t = pos.timestamp;
 
@@ -953,28 +1006,23 @@ try {
         if (ddTotal < 100) { state.totalDistanceM = state.totalDistanceM + ddTotal; }
       }
 
-      var instSpeed = null;
-
-      if (typeof speedRaw === "number" && speedRaw !== null && speedRaw >= 0) {
-        instSpeed = speedRaw;
-      } else {
-        var refPoint = findPastPoint(t, WINDOW_MS);
-        if (refPoint) {
-          var distW = haversine(refPoint.lat, refPoint.lon, lat, lon);
-          var dtW = (t - refPoint.t) / 1000;
-          if (dtW > 0.5) { instSpeed = distW / dtW; }
-        } else if (state.path.length > 0) {
-          var prevSimple = state.path[state.path.length - 1];
-          var dtSimple = (t - prevSimple.t) / 1000;
-          if (dtSimple > 0.2) {
-            var dSimple = haversine(prevSimple.lat, prevSimple.lon, lat, lon);
-            instSpeed = dSimple / dtSimple;
-          }
-        }
-      }
-
       state.path.push({ lat: lat, lon: lon, t: t });
       if (state.path.length > 2000) { state.path.shift(); }
+
+      var instSpeed = null;
+      var refPoint = findPastPoint(t, WINDOW_MS);
+      if (refPoint) {
+        var distW = haversine(refPoint.lat, refPoint.lon, lat, lon);
+        var dtW = (t - refPoint.t) / 1000;
+        if (dtW > 0.8) { instSpeed = distW / dtW; }
+      } else if (state.path.length > 1) {
+        var prevSimple = state.path[state.path.length - 2];
+        var dtSimple = (t - prevSimple.t) / 1000;
+        if (dtSimple > 0.3) {
+          var dSimple = haversine(prevSimple.lat, prevSimple.lon, lat, lon);
+          instSpeed = dSimple / dtSimple;
+        }
+      }
 
       if (instSpeed === null) { return; }
       if (instSpeed > MAX_RUN_SPEED || instSpeed < 0) { return; }
@@ -982,7 +1030,7 @@ try {
       if (state.emaSpeed !== null) {
         var dtAccel = 1;
         if (state.lastEmaTime !== null) {
-          dtAccel = Math.max((t - state.lastEmaTime) / 1000, 0.5);
+          dtAccel = Math.max((t - state.lastEmaTime) / 1000, 0.2);
         }
         var maxDelta = MAX_ACCEL * dtAccel;
         var delta = instSpeed - state.emaSpeed;
@@ -994,11 +1042,11 @@ try {
       if (state.speedBuffer.length > MEDIAN_WINDOW) { state.speedBuffer.shift(); }
       var med = median(state.speedBuffer);
 
-      var alpha = 0.18;
-      if (accuracy <= 12) { alpha = 0.38; }
-      else if (accuracy <= 20) { alpha = 0.28; }
-      else if (accuracy <= 30) { alpha = 0.20; }
-      else { alpha = 0.12; }
+      var alpha = 0.16;
+      if (accuracy <= 12) { alpha = 0.32; }
+      else if (accuracy <= 20) { alpha = 0.24; }
+      else if (accuracy <= 30) { alpha = 0.18; }
+      else { alpha = 0.10; }
 
       if (state.emaSpeed === null) {
         state.emaSpeed = med;
@@ -1331,6 +1379,11 @@ try {
     if (action === "rename-history") {
       var idr = el.getAttribute("data-id");
       renameHistoryRun(idr);
+      return;
+    }
+    if (action === "delete-history") {
+      var idd = el.getAttribute("data-id");
+      deleteHistoryRun(idd);
       return;
     }
     if (action === "close-history-view") { closeHistoryView(); return; }
