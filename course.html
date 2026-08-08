@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>PaceCoach v1.4</title>
+<title>PaceCoach v1.5</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root{
@@ -120,7 +120,7 @@
 <body>
 
 <div id="diag">
-<b>DIAGNOSTIC PACECOACH v1.4</b>
+<b>DIAGNOSTIC PACECOACH v1.5</b>
 Etape A (script minimal)   : <span id="diag-a">NON EXECUTEE</span>
 Etape B (script principal) : <span id="diag-c">NON EXECUTEE</span>
 Erreur capturee            : <span id="diag-err">aucune</span>
@@ -139,7 +139,7 @@ try{
 <div id="app">
   <header>
     <h1>PaceCoach</h1>
-    <span class="ver">v1.4</span>
+    <span class="ver">v1.5</span>
   </header>
   <div id="build-tag"></div>
   <div id="err-banner"></div>
@@ -292,6 +292,7 @@ try {
   state.lastEmaTime = null;
   state.lastCoord = null;
   state.path = [];
+  state.speedAnchor = null;
   state.currentStatus = "idle";
   state.lastAnnounceElapsed = -9999;
   state.lastAlertBeepTime = 0;
@@ -314,11 +315,15 @@ try {
   var GOOD_ACCURACY = 20;
   var MIN_ACCEPTABLE_ACCURACY = 30;
   var WEAK_ACCEPTABLE_ACCURACY = 60;
+  var SPEED_REJECT_ACCURACY = 35;
+  var STEP_MIN = 3;
+  var STEP_MAX = 12;
+  var STEP_ACC_FACTOR = 0.5;
+  var ANCHOR_TIMEOUT_MS = 8000;
   var HYSTERESIS_SEC = 15;
   var DEBOUNCE_SAMPLES = 3;
-  var MEDIAN_WINDOW = 7;
+  var MEDIAN_WINDOW = 6;
   var MAX_ACCEL = 3.2;
-  var WINDOW_MS = 4000;
   var GHOST_ANNOUNCE_SEC = 30;
   var HISTORY_KEY = "pacecoach_history";
   var MIN_SAVE_DISTANCE_M = 50;
@@ -447,13 +452,11 @@ try {
     return (s[mid - 1] + s[mid]) / 2;
   }
 
-  function findPastPoint(nowT, deltaMs) {
-    var i = state.path.length - 1;
-    while (i >= 0) {
-      if (nowT - state.path[i].t >= deltaMs) { return state.path[i]; }
-      i = i - 1;
-    }
-    return null;
+  function stepThresholdFor(accuracy) {
+    var v = accuracy * STEP_ACC_FACTOR;
+    if (v < STEP_MIN) { v = STEP_MIN; }
+    if (v > STEP_MAX) { v = STEP_MAX; }
+    return v;
   }
 
   var audioCtx = null;
@@ -987,6 +990,66 @@ try {
     }
   }
 
+  /* Algorithme de vitesse "anchor-gate" :
+     un point d'ancrage fixe est conserve tant que le mobile ne s'est pas
+     deplace au-dela d'un seuil (proportionnel a la precision GPS courante,
+     borne entre 3 et 12 m). Seul un deplacement reel au-dela de ce seuil
+     declenche un nouveau calcul de vitesse (distance parcourue depuis
+     l'ancre / temps ecoule), puis l'ancre est repositionnee. Cela elimine
+     le bruit GPS de faible amplitude (le "jitter" typique en position
+     stationnaire ou a vitesse lente) qui provoquait des vitesses fausses,
+     sans sacrifier la reactivite a un vrai changement d'allure. */
+  function updateSpeedAnchor(lat, lon, t, accuracy) {
+    if (accuracy > SPEED_REJECT_ACCURACY) { return; }
+
+    if (!state.speedAnchor) {
+      state.speedAnchor = { lat: lat, lon: lon, t: t, acc: accuracy };
+      return;
+    }
+
+    var d = haversine(state.speedAnchor.lat, state.speedAnchor.lon, lat, lon);
+    var dtMs = t - state.speedAnchor.t;
+    var worstAcc = Math.max(accuracy, state.speedAnchor.acc);
+    var threshold = stepThresholdFor(worstAcc);
+
+    if (d < threshold && dtMs <= ANCHOR_TIMEOUT_MS) {
+      return;
+    }
+
+    var dtSec = dtMs / 1000;
+    if (dtSec > 0.3) {
+      var instSpeed = d / dtSec;
+      if (instSpeed <= MAX_RUN_SPEED && instSpeed >= 0) {
+        if (state.emaSpeed !== null) {
+          var dtAccel = Math.max(dtSec, 0.3);
+          var maxDelta = MAX_ACCEL * dtAccel;
+          var delta = instSpeed - state.emaSpeed;
+          if (delta > maxDelta) { instSpeed = state.emaSpeed + maxDelta; }
+          else if (delta < (0 - maxDelta)) { instSpeed = state.emaSpeed - maxDelta; }
+        }
+
+        state.speedBuffer.push(instSpeed);
+        if (state.speedBuffer.length > MEDIAN_WINDOW) { state.speedBuffer.shift(); }
+        var med = median(state.speedBuffer);
+
+        var alpha = 0.20;
+        if (accuracy <= 12) { alpha = 0.40; }
+        else if (accuracy <= 20) { alpha = 0.30; }
+        else if (accuracy <= 30) { alpha = 0.22; }
+        else { alpha = 0.14; }
+
+        if (state.emaSpeed === null) {
+          state.emaSpeed = med;
+        } else {
+          state.emaSpeed = alpha * med + (1 - alpha) * state.emaSpeed;
+        }
+        state.lastEmaTime = t;
+      }
+    }
+
+    state.speedAnchor = { lat: lat, lon: lon, t: t, acc: accuracy };
+  }
+
   function processPosition(pos) {
     try {
       var lat = pos.coords.latitude;
@@ -1009,51 +1072,7 @@ try {
       state.path.push({ lat: lat, lon: lon, t: t });
       if (state.path.length > 2000) { state.path.shift(); }
 
-      var instSpeed = null;
-      var refPoint = findPastPoint(t, WINDOW_MS);
-      if (refPoint) {
-        var distW = haversine(refPoint.lat, refPoint.lon, lat, lon);
-        var dtW = (t - refPoint.t) / 1000;
-        if (dtW > 0.8) { instSpeed = distW / dtW; }
-      } else if (state.path.length > 1) {
-        var prevSimple = state.path[state.path.length - 2];
-        var dtSimple = (t - prevSimple.t) / 1000;
-        if (dtSimple > 0.3) {
-          var dSimple = haversine(prevSimple.lat, prevSimple.lon, lat, lon);
-          instSpeed = dSimple / dtSimple;
-        }
-      }
-
-      if (instSpeed === null) { return; }
-      if (instSpeed > MAX_RUN_SPEED || instSpeed < 0) { return; }
-
-      if (state.emaSpeed !== null) {
-        var dtAccel = 1;
-        if (state.lastEmaTime !== null) {
-          dtAccel = Math.max((t - state.lastEmaTime) / 1000, 0.2);
-        }
-        var maxDelta = MAX_ACCEL * dtAccel;
-        var delta = instSpeed - state.emaSpeed;
-        if (delta > maxDelta) { instSpeed = state.emaSpeed + maxDelta; }
-        else if (delta < (0 - maxDelta)) { instSpeed = state.emaSpeed - maxDelta; }
-      }
-
-      state.speedBuffer.push(instSpeed);
-      if (state.speedBuffer.length > MEDIAN_WINDOW) { state.speedBuffer.shift(); }
-      var med = median(state.speedBuffer);
-
-      var alpha = 0.16;
-      if (accuracy <= 12) { alpha = 0.32; }
-      else if (accuracy <= 20) { alpha = 0.24; }
-      else if (accuracy <= 30) { alpha = 0.18; }
-      else { alpha = 0.10; }
-
-      if (state.emaSpeed === null) {
-        state.emaSpeed = med;
-      } else {
-        state.emaSpeed = alpha * med + (1 - alpha) * state.emaSpeed;
-      }
-      state.lastEmaTime = t;
+      updateSpeedAnchor(lat, lon, t, accuracy);
     } catch (e) {}
   }
 
@@ -1273,6 +1292,7 @@ try {
       state.pausedAccum = 0;
       state.totalDistanceM = 0;
       state.path = [];
+      state.speedAnchor = null;
       state.speedBuffer = [];
       state.emaSpeed = null;
       state.lastEmaTime = null;
