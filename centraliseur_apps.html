@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark light" />
 <meta name="theme-color" content="#0b1020" id="metaTheme" />
-<title>Centraliseur Apps v3.1.0</title>
+<title>Centraliseur Apps v3.2.0</title>
 <style>
 :root{
   --bg:#0a0f1f; --bg2:#10182f; --surface:#151e3a; --surface2:#1b2748; --line:rgba(255,255,255,.09);
@@ -165,6 +165,31 @@ select{min-height:42px;padding-right:28px}
 .empty{margin-top:22px;padding:34px 20px;text-align:center;border:1px dashed var(--line);border-radius:var(--radius);color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:12px}
 .empty h2{color:var(--text);font-size:17px}
 
+/* ── Liste compacte (une ligne par app) ── */
+button.icon-btn,.btn.icon-btn{padding:0}
+.group{margin-top:16px}
+.group-head{margin-bottom:6px}
+.grid{display:flex;flex-direction:column;gap:5px}
+.card{padding:4px 6px 4px 12px;gap:0;border-radius:12px;box-shadow:none}
+.line{display:flex;align-items:center;gap:8px;min-width:0;min-height:38px}
+.hit{flex:1 1 0;min-width:0;justify-content:flex-start;gap:8px;background:transparent;border:0;padding:0 4px;min-height:36px;text-align:left;border-radius:8px;overflow:hidden}
+.hit:hover{transform:none;background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.hit .name{font-size:14px;flex:0 1 auto;min-width:0}
+.hit .path{flex:0 1 auto;min-width:0}
+.line .tag{flex:0 0 auto;font-size:11px;padding:1px 7px;max-width:110px}
+.line .src{flex:0 0 auto}
+.when{flex:0 0 auto;font-size:12px;min-width:84px;text-align:right}
+.acts{display:flex;gap:2px;flex:0 0 auto}
+.acts .icon-btn{width:30px;min-height:30px;background:transparent;border-color:transparent;color:var(--muted)}
+.acts .icon-btn:hover{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.acts .fav.on{color:#fbbf24}
+.card .details{margin:2px 0 6px;padding:10px 4px 4px}
+.wide-only{display:none!important}
+@container menu (min-width:721px){
+  .wide-only{display:inline-flex!important}
+  .when.wide-only{display:inline-block!important}
+  .card{padding-left:14px}
+}
 /* ── Dialogues ── */
 dialog{border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--text);padding:0;width:min(640px,calc(100vw - 24px));max-height:calc(100dvh - 24px);box-shadow:0 30px 80px rgba(0,0,0,.5)}
 dialog::backdrop{background:rgba(5,8,18,.65);backdrop-filter:blur(3px)}
@@ -187,7 +212,9 @@ pre.log{margin:0;padding:10px;border-radius:12px;background:var(--bg);border:1px
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
 @container menu (max-width:720px){
-  .tiles{grid-template-columns:repeat(2,1fr)}
+  .tiles{grid-template-columns:repeat(4,1fr);gap:6px}
+  .tile{padding:6px 8px;border-radius:10px;box-shadow:none}
+  .tile span{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
   .topbar-in{padding:8px 12px;flex-wrap:wrap}
   .top-actions{margin-left:auto;gap:6px}
   .top-actions .icon-btn{width:34px;min-height:34px}
@@ -196,7 +223,7 @@ pre.log{margin:0;padding:10px;border-radius:12px;background:var(--bg);border:1px
   .menu-scroll main{padding:12px 12px 40px}
   .drive-btn .lbl{display:none}
   .grid{grid-template-columns:1fr}
-  .tile b{font-size:20px}
+  .tile b{font-size:16px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -353,7 +380,7 @@ pre.log{margin:0;padding:10px;border-radius:12px;background:var(--bg);border:1px
 /* ════════════════════════════════════════════════════════════
    Constantes
    ════════════════════════════════════════════════════════════ */
-const APP_VERSION = 'v3.1.0';
+const APP_VERSION = 'v3.2.0';
 const LS_MAIN  = 'centraliseur-apps-v3';
 const LS_PREFS = 'centraliseur-apps-prefs';
 const LEGACY = { profiles:'centraliseur-apps-profiles', data:'centraliseur-apps-data', koyeb:'centraliseur-apps-koyeb-urls' };
@@ -629,35 +656,39 @@ const SORTERS = {
 function cardHtml(r){
   const st = STATUS[r.status] || STATUS.unknown;
   const open = !!prefs.expanded[r.key];
-  const path = r.pagePath && r.pagePath !== 'index.html' ? `<span class="path" title="${esc(r.pagePath)}">/ ${esc(r.pagePath)}</span>` : '';
+  const panel = prefs.openMode === 'panel';
+  const path = r.pagePath && r.pagePath !== 'index.html' ? `<span class="path">/ ${esc(r.pagePath)}</span>` : '';
   const srcLink = r.metaUrl
     ? `<a href="${esc(safeUrl(r.metaUrl))}" target="_blank" rel="noopener noreferrer">${esc(r.sourceInfo || r.ownerLabel)}</a>`
     : esc(r.sourceInfo || r.ownerLabel || '—');
-  return `<article class="card${open ? ' open' : ''}${r.key === prefs.current && document.body.classList.contains('has-view') ? ' current' : ''}" data-key="${esc(r.key)}">
-  <div class="card-head">
+  const altLabel = panel ? 'Ouvrir dans un nouvel onglet' : 'Afficher dans le panneau';
+  return `<article class="card${open ? ' open' : ''}${r.key === prefs.current && hasView() ? ' current' : ''}" data-key="${esc(r.key)}">
+  <div class="line">
     <span class="dot ${r.status}" title="${st.label}"></span>
-    <div class="titles"><div class="name" title="${esc(r.name)}">${esc(r.name)}</div>${path}</div>
-    <button class="icon-btn sm fav${r.fav ? ' on' : ''}" data-act="fav" aria-pressed="${r.fav}" aria-label="Favori" title="Favori">${ico('star')}</button>
-  </div>
-  <div class="card-meta">
-    <span class="src src-${r.source}" title="${SOURCES[r.source].title}">${SOURCES[r.source].short}</span>
+    <button class="hit" data-act="open" title="${panel ? 'Afficher dans le panneau' : 'Ouvrir dans un onglet'} — ${esc(r.link)}"><span class="name">${esc(r.name)}</span>${path}</button>
+    <span class="src src-${r.source} wide-only" title="${SOURCES[r.source].title}">${SOURCES[r.source].short}</span>
     ${r.version ? `<span class="tag" title="${esc(r.version)}">${esc(r.version)}</span>` : ''}
-    <span class="muted" title="${esc(fmtDate(r.updatedAt))}">${esc(ago(r.updatedAt))}</span>
-  </div>
-  <div class="card-actions">
-    <button class="btn primary sm" data-act="open">${ico(prefs.openMode === 'panel' ? 'panel' : 'open')}Ouvrir</button>
-    <button class="icon-btn sm" data-act="alt-open" title="${prefs.openMode === 'panel' ? 'Ouvrir dans un nouvel onglet' : 'Afficher dans le panneau'}" aria-label="${prefs.openMode === 'panel' ? 'Ouvrir dans un nouvel onglet' : 'Afficher dans le panneau'}">${ico(prefs.openMode === 'panel' ? 'open' : 'panel')}</button>
-    <button class="icon-btn sm" data-act="copy" title="Copier l’URL" aria-label="Copier l’URL">${ico('copy')}</button>
-    <button class="icon-btn sm" data-act="wake" title="Réveiller" aria-label="Réveiller">${ico('bolt')}</button>
-    <button class="icon-btn sm chev" data-act="toggle" title="Détails" aria-label="Détails" aria-expanded="${open}">${ico('chev')}</button>
+    <span class="muted when wide-only" title="${esc(fmtDate(r.updatedAt))}">${esc(ago(r.updatedAt))}</span>
+    <div class="acts">
+      <button class="icon-btn sm fav${r.fav ? ' on' : ''}" data-act="fav" aria-pressed="${r.fav}" aria-label="Favori" title="Favori">${ico('star')}</button>
+      <button class="icon-btn sm" data-act="alt-open" title="${altLabel}" aria-label="${altLabel}">${ico(panel ? 'open' : 'panel')}</button>
+      <button class="icon-btn sm wide-only" data-act="copy" title="Copier l’URL" aria-label="Copier l’URL">${ico('copy')}</button>
+      <button class="icon-btn sm wide-only" data-act="wake" title="Réveiller" aria-label="Réveiller">${ico('bolt')}</button>
+      <button class="icon-btn sm chev" data-act="toggle" title="Détails" aria-label="Détails" aria-expanded="${open}">${ico('chev')}</button>
+    </div>
   </div>
   <div class="details">
     <div class="kv"><span>URL</span><code>${esc(r.link)}</code></div>
     <div class="kv"><span>Source</span><span>${srcLink}</span></div>
     <div class="kv"><span>Statut</span><span>${st.label}${r.checkedAt ? ` · vérifié ${esc(ago(r.checkedAt))}` : ''}</span></div>
+    <div class="kv"><span>Version</span><span>${esc(r.version || '—')}</span></div>
     <div class="kv"><span>Mise à jour</span><span>${esc(fmtDate(r.updatedAt))}</span></div>
     <textarea class="note" placeholder="Note personnelle…" aria-label="Note">${esc(r.note)}</textarea>
-    <div><button class="sm" data-act="recheck">${ico('refresh')}Revérifier</button></div>
+    <div class="btns">
+      <button class="sm" data-act="copy">${ico('copy')}Copier l’URL</button>
+      <button class="sm" data-act="wake">${ico('bolt')}Réveiller</button>
+      <button class="sm" data-act="recheck">${ico('refresh')}Revérifier</button>
+    </div>
   </div>
 </article>`;
 }
