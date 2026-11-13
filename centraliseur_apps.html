@@ -1,1133 +1,1476 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Centraliseur Apps v2.0.1</title>
-  <style>
-    :root{
-      --bg1:#0b1126;--bg2:#16203c;--glass:rgba(22,30,58,.65);--line:rgba(255,255,255,.08);--text:#f5f8ff;--muted:#aab7d7;
-      --blue:#7da8ff;--blue2:#4b7dff;--ok:#38d39f;--ko:#ff6d86;--wait:#ffb84d;--shadow:0 18px 42px rgba(0,0,0,.28);--radius:22px;
-      --item-h:56px;
-    }
-    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-    html,body{margin:0;padding:0;height:100dvh;overflow:hidden}
-    body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);background:radial-gradient(circle at 15% 0%, rgba(125,168,255,.12), transparent 28%),radial-gradient(circle at 100% 10%, rgba(56,211,159,.06), transparent 20%),linear-gradient(180deg,var(--bg1),var(--bg2));}
-    .wrap{max-width:860px;margin:0 auto;height:100dvh;display:flex;flex-direction:column;padding:14px 14px calc(14px + env(safe-area-inset-bottom));overflow:hidden;}
-    .sticky{flex-shrink:0;padding-top:max(8px, env(safe-area-inset-top));margin:-14px -14px 12px;padding-left:14px;padding-right:14px}
-    .sticky-inner{display:flex;justify-content:space-between;align-items:center;width:100%;gap:10px;}
-    .glass{background:var(--glass);border:1px solid var(--line);box-shadow:var(--shadow);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:var(--radius)}
-    .status{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:14px;background:rgba(15,20,38,.75);border:1px solid var(--line)}
-    .dot{width:10px;height:10px;border-radius:999px;background:var(--wait);flex:0 0 auto;box-shadow:0 0 12px currentColor}
-    .green{background:var(--ok);color:var(--ok)}.red{background:var(--ko);color:var(--ko)}.orange{background:var(--wait);color:var(--wait)}
-    .status-text{font-size:12px;line-height:1.4}
-    .header-badge{font-size:11px;color:#cce0ff;font-weight:600;background:rgba(125,168,255,0.12);padding:6px 10px;border-radius:10px;border:1px solid rgba(125,168,255,0.25);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
-    .hero,.panel{padding:16px;flex-shrink:0}.hero{margin-bottom:14px;padding-top:14px;padding-bottom:14px}
-    h1,h2,h3,p{margin:0}h1{font-size:24px;letter-spacing:-.02em}h2{font-size:17px}h3{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#a7d5ff}
-    .version{color:#a7d5ff;font-size:12px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px}.muted{color:var(--muted);font-size:13px;line-height:1.45;margin-top:6px}
-    .head{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;flex-wrap:nowrap}.head-meta{display:flex;align-items:center;gap:10px;flex-wrap:nowrap}
-    .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);font-size:12px;font-weight:600}
-    .pill.connected{background:rgba(56,211,159,.15);color:var(--ok);border-color:rgba(56,211,159,.3)}
-    .pill.disconnected{background:rgba(255,109,134,.15);color:var(--ko);border-color:rgba(255,109,134,.3)}
-    .pill.count{background:rgba(255,255,255,.05);color:var(--text)}
-    .chev{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;border:1px solid var(--line);background:rgba(17,23,42,.55);font-size:18px;font-weight:bold;transition:transform .2s ease, background .2s ease}
-    .panel.collapsed .body{display:none}
-    .row{display:grid;grid-template-columns:1.15fr .85fr;gap:10px}.field{display:grid;gap:6px;margin-top:12px}.field-stack{display:grid;gap:10px}.field.compact{margin-top:0}label{color:var(--muted);font-size:13px}
-    input,textarea{width:100%;border:1px solid rgba(255,255,255,.08);background:rgba(8,12,24,.5);color:var(--text);outline:none;border-radius:16px;padding:12px 14px;font:inherit}
-    textarea{min-height:58px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
-    input:focus,textarea:focus{border-color:rgba(126,168,255,.8);box-shadow:0 0 0 3px rgba(126,168,255,.15)}
-    .actions{display:grid;gap:10px;margin-top:14px;grid-template-columns:1fr}
-    button{border:1px solid rgba(255,255,255,.08);background:rgba(17,24,46,.8);color:var(--text);font:inherit;cursor:pointer;border-radius:16px;padding:14px 14px;min-height:50px;transition:transform .15s ease,opacity .15s ease,box-shadow .15s ease,background .15s ease}
-    button:hover{transform:translateY(-1px)}button:active{transform:scale(.98)}button:disabled{opacity:.5;cursor:not-allowed;transform:none}
-    .primary{background:linear-gradient(135deg, rgba(75,125,255,.95), rgba(126,168,255,.9));box-shadow:0 8px 20px rgba(75,125,255,.25);border:none}
-    .ghost{background:rgba(17,24,46,.4)}
-    .warn{background:rgba(86,32,43,.65); color:#ffd5de; border-color:rgba(255,109,134,.18)}
-    .mini-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-    .mini-btn{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;padding:0;min-height:0;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--blue)}
-    .mini-btn.warn{color:#ffb3c0;background:rgba(255,109,134,.08);border-color:rgba(255,109,134,.18)}
-    .mini-btn svg{width:18px;height:18px}
-    .hint-line{margin-top:12px;color:#a7d5ff;background:none;border:0;padding:0;min-height:auto;text-align:left;font-size:13px}.token-row{display:flex;align-items:center;gap:8px}.token-row input{flex:1 1 auto}.toast-copy{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(10px);padding:10px 14px;border-radius:14px;background:rgba(17,24,46,.94);border:1px solid rgba(125,168,255,.28);color:#f5f8ff;box-shadow:0 18px 42px rgba(0,0,0,.28);font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s ease,transform .2s ease;z-index:9999}.toast-copy.show{opacity:1;transform:translateX(-50%) translateY(0)}
-    .hidden{display:none!important}
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark light" />
+<meta name="theme-color" content="#0b1020" id="metaTheme" />
+<title>Centraliseur Apps v3.0.0</title>
+<style>
+:root{
+  --bg:#0a0f1f; --bg2:#10182f; --surface:#151e3a; --surface2:#1b2748; --line:rgba(255,255,255,.09);
+  --text:#eef2ff; --muted:#93a1c6; --accent:#7da8ff; --accent-ink:#0a0f1f; --accent2:#4b7dff;
+  --ok:#34d399; --ko:#fb7185; --wait:#fbbf24; --sleep:#a78bfa; --unk:#7b87a8;
+  --radius:16px; --shadow:0 10px 30px rgba(0,0,0,.28); --focus:0 0 0 3px rgba(125,168,255,.35);
+}
+[data-theme="light"]{
+  --bg:#f2f5fc; --bg2:#e8edf9; --surface:#ffffff; --surface2:#f3f6fd; --line:rgba(20,30,60,.12);
+  --text:#141b34; --muted:#5a6788; --accent:#2f5fe0; --accent-ink:#ffffff; --accent2:#1f49c0;
+  --ok:#059669; --ko:#e11d48; --wait:#b45309; --sleep:#6d28d9; --unk:#7b87a8;
+  --shadow:0 8px 24px rgba(20,30,60,.08); --focus:0 0 0 3px rgba(47,95,224,.28);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-padding-top:90px}
+body{margin:0;min-height:100dvh;font:14px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--text);
+  background:radial-gradient(1000px 500px at 10% -10%,rgba(125,168,255,.12),transparent 60%),linear-gradient(180deg,var(--bg),var(--bg2)) fixed}
+h1,h2,h3,p{margin:0}
+a{color:var(--accent)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+.hidden{display:none!important}
+.muted{color:var(--muted)}
+:focus-visible{outline:none;box-shadow:var(--focus)}
+.ic svg,svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block}
+.sm .ic svg,.sm svg.i{width:16px;height:16px}
 
-    .apps-panel{display:flex;flex-direction:column;flex:1;min-height:0;margin-bottom:0}
-    .toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;flex-shrink:0}
-    .toolbar-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .pill-btn{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:var(--blue);cursor:pointer;transition:.2s;padding:0;min-height:0;}
-    .pill-btn:hover{background:rgba(255,255,255,.1)}
-    .pill-btn svg{width:16px;height:16px}
-    .fit{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;position:relative;margin-top:12px;padding-right:4px;scroll-behavior:auto}
-    .fit::-webkit-scrollbar{width:6px}.fit::-webkit-scrollbar-track{background:transparent}.fit::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:10px}
-    .list{display:grid;gap:8px;padding-bottom:12px}
-    .group-head{display:flex;align-items:center;justify-content:flex-start;gap:5px;padding:6px 4px 2px}.group-label{padding:0;color:#a7d5ff;font-size:12px;text-transform:uppercase;letter-spacing:.12em}.group-rescan{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:5px;padding:0;background:none;border:none;color:rgba(167,213,255,.45);cursor:pointer;font-size:10px;line-height:1;transition:.15s;flex-shrink:0}.group-rescan:hover{color:#a7d5ff}
-    .item-card{display:flex;flex-direction:column;align-items:stretch;gap:0;height:auto;min-height:var(--item-h);padding:0;border-radius:18px;border:1px solid rgba(255,255,255,.06);background:linear-gradient(180deg, rgba(28,38,68,.7), rgba(18,25,48,.6));box-shadow:0 4px 12px rgba(0,0,0,.15);transition:transform .15s ease, opacity .15s ease, filter .15s ease, background .2s ease;width:100%;overflow:hidden}
-    .item-card.open{background:linear-gradient(180deg, rgba(38,52,94,.9), rgba(24,34,64,.8));border-color: rgba(126,168,255,.2)}
-    .item-main{display:flex;align-items:center;gap:10px;height:var(--item-h);width:100%;padding:6px 8px;cursor:pointer}
-    .item-main:hover{background:rgba(255,255,255,.02)}
-    .rank{flex:0 0 32px;width:32px;height:32px;border-radius:12px;display:grid;place-items:center;font-weight:700;font-size:12px;color:#cce0ff;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.05);transition:all .2s ease}
-    .item-title-wrap{flex:1 1 0%;min-width:0;display:flex;align-items:center;gap:8px}
-    .item-title{flex:0 1 auto;font-weight:600;font-size:14px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .item-version{flex:0 0 auto;font-size:11px;font-weight:500;color:var(--muted);background:rgba(255,255,255,.08);padding:2px 6px;border-radius:6px}
-    .item-meta{font-size:10px;color:var(--wait);border:1px solid rgba(255,184,77,.4);padding:2px 4px;border-radius:4px;white-space:nowrap}
-    .item-actions{display:none;align-items:center;gap:8px;padding:2px 8px 12px 46px;flex-wrap:wrap;width:100%}
-    .item-card.open .item-actions{display:flex}
-    .action-btn{flex:0 0 36px;width:36px;height:36px;display:grid;place-items:center;color:var(--blue);cursor:pointer;border-radius:10px;transition:background .2s, color .2s;background:rgba(125,168,255,0.08);border:1px solid rgba(125,168,255,0.1);padding:0;min-height:0}
-    .action-btn:active{background:rgba(255,255,255,.1)}
-    .action-btn svg{width:18px;height:18px}.action-btn:hover{background:rgba(125,168,255,0.15)}
-    .action-btn.warn{color:#ffb3c0;background:rgba(255,109,134,.08);border-color:rgba(255,109,134,.18)}
-    .grow-url{flex:1 1 260px;min-width:220px;color:#d8e6ff;background:rgba(8,12,24,.35);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:10px 12px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .empty{color:var(--muted);margin-top:14px;padding:14px;border:1px dashed var(--line);border-radius:16px;background:rgba(13,19,36,.42)}
+/* ── Boutons ── */
+button,.btn{font:inherit;color:var(--text);cursor:pointer;border:1px solid var(--line);background:var(--surface2);border-radius:12px;
+  padding:0 14px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;white-space:nowrap;
+  transition:transform .12s ease,background .15s ease,opacity .15s ease}
+button:hover,.btn:hover{transform:translateY(-1px)}
+button:active,.btn:active{transform:scale(.97)}
+button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn.sm,button.sm{min-height:34px;padding:0 11px;border-radius:10px;font-size:13px}
+.btn.primary,button.primary{background:linear-gradient(135deg,var(--accent2),var(--accent));color:var(--accent-ink);border-color:transparent;font-weight:600}
+[data-theme="dark"] .btn.primary,[data-theme="dark"] button.primary{color:#fff}
+button.danger{color:var(--ko);border-color:color-mix(in srgb,var(--ko) 35%,transparent);background:color-mix(in srgb,var(--ko) 9%,transparent)}
+.icon-btn{width:40px;min-height:40px;padding:0}
+.icon-btn.sm{width:34px;min-height:34px}
 
-    @media (max-width:640px){
-      .wrap{padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
-      .sticky{margin:-12px -12px 8px;padding-left:12px;padding-right:12px}
-      .panel{padding:12px}
-      .item-main{gap:4px;height:54px;padding:5px 6px}.rank{flex:0 0 24px;width:24px;height:24px;font-size:10px}
-      .item-title-wrap{gap:6px}.item-title{font-size:13px}
-      .item-version{font-size:10px;padding:1px 4px}.action-btn{flex:0 0 32px;width:32px;height:32px}.action-btn svg{width:16px;height:16px}
-      .pill-btn{width:28px;height:28px}.pill-btn svg{width:14px;height:14px}.status-text{font-size:11px}.header-badge{font-size:10px;padding:4px 8px}
-      .item-actions{padding:0 6px 10px 34px; gap:6px}.row{grid-template-columns:1fr}
-    }
-  
-.version-input{width:48px;font-size:11px;text-align:center;background:rgba(125,168,255,.1);border:1px solid rgba(125,168,255,.3);border-radius:8px;padding:2px 4px;color:var(--blue);font-weight:500;font-family:ui-monospace}
-.version-input:focus{outline:none;box-shadow:0 0 0 2px rgba(125,168,255,.3)}
-#copyUrlBtn:hover{opacity:1!important;background:rgba(125,168,255,.15)!important}
+/* ── En-tête ── */
+.topbar{position:sticky;top:0;z-index:50;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  background:color-mix(in srgb,var(--bg) 80%,transparent);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top)}
+.topbar-in{max-width:1180px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent2),var(--accent));color:#fff;font-weight:800;flex:0 0 auto}
+.brand h1{font-size:17px;letter-spacing:-.01em;line-height:1.1}
+.brand small{color:var(--muted);font-size:11px}
+.top-actions{display:flex;align-items:center;gap:8px}
+.status-chip{min-height:34px;padding:0 12px;border-radius:999px;font-size:12px;max-width:min(46vw,360px);gap:8px}
+.status-chip span.t{overflow:hidden;text-overflow:ellipsis}
+.dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;background:var(--unk);box-shadow:0 0 0 3px color-mix(in srgb,currentColor 18%,transparent);color:var(--unk)}
+.dot.up,.dot.ok{background:var(--ok);color:var(--ok)}
+.dot.down,.dot.ko{background:var(--ko);color:var(--ko)}
+.dot.wait{background:var(--wait);color:var(--wait)}
+.dot.sleep{background:var(--sleep);color:var(--sleep)}
+.dot.unknown,.dot.idle{background:var(--unk);color:var(--unk)}
+.drive-btn.on{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
+.drive-btn.err{color:var(--ko)}
+.progress{height:3px;background:transparent;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width .25s ease}
+.progress.indet i{width:35%;animation:slide 1.1s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
 
-/* ── GOOGLE DRIVE OVERLAYS ── */
-.drive-overlay{position:fixed;inset:0;z-index:9000;background:rgba(11,17,38,.97);display:none;align-items:center;justify-content:center;flex-direction:column;gap:18px;padding:24px;}
-.drive-overlay.open{display:flex;}
-.drive-card{background:rgba(22,30,58,.9);border:1px solid rgba(255,255,255,.1);border-radius:22px;padding:32px 28px;width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;box-shadow:0 18px 42px rgba(0,0,0,.4);}
-.drive-title{font-size:20px;font-weight:700;letter-spacing:-.02em;color:#f5f8ff;text-align:center;}
-.drive-sub{font-size:13px;color:var(--muted);line-height:1.6;text-align:center;}
-.drive-btn{padding:14px;border-radius:16px;background:linear-gradient(135deg,rgba(75,125,255,.95),rgba(126,168,255,.9));color:#fff;font-size:15px;font-weight:600;border:none;cursor:pointer;min-height:50px;transition:opacity .15s;}
-.drive-btn:hover{opacity:.88;}
-.drive-btn.ghost{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);}
-.drive-msg{font-size:12px;color:var(--muted);text-align:center;}
-.drive-spinner{width:34px;height:34px;border:3px solid rgba(255,255,255,.1);border-top-color:#7da8ff;border-radius:50%;animation:dspin .8s linear infinite;}
-@keyframes dspin{to{transform:rotate(360deg)}}
-.drive-update-actions{display:flex;gap:8px;justify-content:flex-end;}
+/* ── Contenu ── */
+main{max-width:1180px;margin:0 auto;padding:16px 16px calc(40px + env(safe-area-inset-bottom))}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.tile{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:2px;padding:12px 14px;min-height:0;height:auto;border-radius:14px;background:var(--surface);box-shadow:var(--shadow);text-align:left}
+.tile b{font-size:22px;line-height:1.1;letter-spacing:-.02em}
+.tile span{color:var(--muted);font-size:12px}
+.tile.active{border-color:var(--accent);box-shadow:var(--focus)}
+.tile.up b{color:var(--ok)}.tile.down b{color:var(--ko)}.tile.other b{color:var(--wait)}
+.scaninfo{margin:8px 2px 0;font-size:12px;color:var(--muted)}
+.toolbar{margin-top:14px;display:grid;gap:10px}
+.search{position:relative;flex:1 1 220px;min-width:0}
+.search .ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+input,textarea,select{width:100%;font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:var(--focus)}
+.search input{padding-left:38px;min-height:42px}
+textarea{resize:vertical;min-height:62px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+select{min-height:42px;padding-right:28px}
+.tb-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chips{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 auto}
+.chip{min-height:32px;padding:0 12px;border-radius:999px;font-size:13px;background:transparent}
+.chip .n{color:var(--muted);font-size:11px}
+.chip.active{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:600}
+[data-theme="dark"] .chip.active{color:#0a0f1f}
+.chip.active .n{color:inherit;opacity:.75}
+.sel{display:flex;gap:8px;flex:0 1 auto}
+.sel select{width:auto}
+
+/* ── Groupes & cartes ── */
+.group{margin-top:22px}
+.group-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.group-head h2{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:700}
+.group-head .n{font-size:11px;color:var(--muted);background:var(--surface);border:1px solid var(--line);padding:1px 8px;border-radius:999px}
+.group-head .icon-btn{width:28px;min-height:28px;border-radius:8px;background:transparent;border-color:transparent;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow);min-width:0;transition:border-color .15s}
+.card:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+.card-head{display:flex;align-items:center;gap:10px;min-width:0}
+.titles{flex:1;min-width:0;display:flex;align-items:baseline;gap:6px}
+.name{font-weight:650;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.path{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.fav{color:var(--muted);background:transparent;border-color:transparent}
+.fav.on{color:#fbbf24}.fav.on svg{fill:currentColor}
+.card-meta{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:12px}
+.src{font-size:10px;font-weight:800;letter-spacing:.06em;padding:2px 7px;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
+.src-github{color:#c9d1d9;background:rgba(139,148,158,.16)}
+[data-theme="light"] .src-github{color:#24292f}
+.src-hf{color:#d97706;background:rgba(251,191,36,.16)}
+.src-koyeb{color:var(--ok);background:rgba(52,211,153,.14)}
+.tag{padding:2px 8px;border-radius:7px;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-actions{display:flex;gap:6px;align-items:center}
+.card-actions .btn.primary{flex:1}
+.chev svg{transition:transform .2s}
+.card.open .chev svg{transform:rotate(180deg)}
+.details{display:none;border-top:1px dashed var(--line);padding-top:10px;gap:8px;flex-direction:column}
+.card.open .details{display:flex}
+.kv{display:grid;grid-template-columns:78px 1fr;gap:8px;font-size:12px;align-items:start;min-width:0}
+.kv>span:first-child{color:var(--muted)}
+.kv code{word-break:break-all;user-select:all}
+.kv a{word-break:break-all}
+.note{min-height:54px;font-family:inherit;font-size:13px}
+.empty{margin-top:22px;padding:34px 20px;text-align:center;border:1px dashed var(--line);border-radius:var(--radius);color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:12px}
+.empty h2{color:var(--text);font-size:17px}
+
+/* ── Dialogues ── */
+dialog{border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--text);padding:0;width:min(640px,calc(100vw - 24px));max-height:calc(100dvh - 24px);box-shadow:0 30px 80px rgba(0,0,0,.5)}
+dialog::backdrop{background:rgba(5,8,18,.65);backdrop-filter:blur(3px)}
+.dlg-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:1}
+.dlg-head h2{font-size:17px}
+.dlg-body{padding:6px 16px 18px;overflow:auto;max-height:calc(100dvh - 90px)}
+.sec{margin-top:16px;display:grid;gap:10px}
+.sec h3{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent)}
+.field{display:grid;gap:5px}
+.field label{font-size:12px;color:var(--muted)}
+.field .hint{font-size:11px;color:var(--muted)}
+.inline{display:flex;gap:8px}
+.inline input{flex:1}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+pre.log{margin:0;padding:10px;border-radius:12px;background:var(--bg);border:1px solid var(--line);font-size:11px;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.modal-card{padding:22px;display:grid;gap:14px;text-align:center}
+.modal-card h2{font-size:20px}
+.modal-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,12px);padding:10px 16px;border-radius:12px;background:var(--surface2);border:1px solid var(--line);box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:.2s;z-index:100;font-size:13px}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:720px){
+  .tiles{grid-template-columns:repeat(2,1fr)}
+  .topbar-in{padding:8px 12px}
+  main{padding:12px 12px 40px}
+  .brand>div:last-child{display:none}
+  .brand{flex:0 0 auto}
+  .top-actions{flex:1;min-width:0;justify-content:flex-end}
+  .status-chip{flex:1 1 auto;max-width:none;min-width:0;justify-content:flex-start}
+  .drive-btn .lbl{display:none}
+  .grid{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
-  <div class="wrap" id="mainWrap">
-    <div class="sticky">
-      <div class="sticky-inner">
-        <div class="status glass"><span id="statusDot" class="dot orange"></span><div id="statusText" class="status-text">En attente.</div></div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-          <div class="header-badge" id="driveBadge" style="cursor:pointer;user-select:none" onclick="handleDriveBadgeClick()" title="Google Drive — cliquer pour déconnecter">☁ Drive</div>
-          <div class="header-badge"><span id="appVersionLabel">v2.0.1</span></div>
-        </div>
-      </div>
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand">
+      <div class="logo">C</div>
+      <div><h1>Centraliseur Apps</h1><small id="verLabel"></small></div>
     </div>
-
-    <section class="hero glass"><div style="display:flex;align-items:center;justify-content:center;gap:10px">
-  <h1>Centraliseur Apps</h1>
-  <button id="copyUrlBtn" title="Copier l'URL du centraliseur" style="background:none;border:none;cursor:pointer;padding:4px;color:var(--blue);opacity:.7;flex-shrink:0;min-height:0;width:28px;height:28px;display:grid;place-items:center;border-radius:8px;transition:opacity .2s,background .2s">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-    </svg>
-  </button>
-</div></section>
-
-    <section id="sourcesPanel" class="panel glass">
-      <div id="sourcesHead" class="head">
-        <div style="display:flex; align-items:center;"><h2>Sources</h2></div>
-        <div class="head-meta"><div id="sourcesStatePill" class="pill disconnected">À configurer</div><div id="sourcesChev" class="chev">-</div></div>
-      </div>
-      <div class="body" id="sourcesBody">
-        <div class="row">
-          <div class="field-stack">
-            <div class="field compact"><label for="koyebUrls">URLs Koyeb publiques</label><textarea id="koyebUrls" placeholder="https://mon-app.koyeb.app&#10;https://autre-app.koyeb.app"></textarea></div>
-            <div class="field compact"><label for="koyebToken">Koyeb API token</label><input id="koyebToken" type="password" placeholder=""></div>
-            <div class="field compact"><label for="koyebProxyUrl">Koyeb proxy URL</label><input id="koyebProxyUrl" type="text" placeholder="/api/koyeb/apps"></div>
-            <div class="field compact"><label for="githubProfiles">GitHub profils</label><textarea id="githubProfiles" placeholder=""></textarea></div>
-            <div class="field compact"><label for="githubToken">GitHub token optionnel</label><div class="token-row"><input id="githubToken" type="password" placeholder=""><button id="toggleGithubToken" type="button" class="mini-btn" title="Afficher ou masquer le token">👁</button></div></div>
-          </div>
-          <div class="field-stack">
-            <div class="field compact"><label for="hfProfiles">Hugging Face profils</label><textarea id="hfProfiles" placeholder=""></textarea></div>
-          </div>
-        </div>
-        <div class="actions">
-          <button id="scanBtn" class="primary" type="button">Scanner & Charger</button>
-          <button id="clearDataBtn" class="ghost" type="button">RaZ donnée app</button>
-          <button id="clearBtn" class="warn" type="button">Effacer profils</button>
-        </div>
-        <button id="debugToggle" class="hint-line" type="button">Afficher debug</button>
-        <div id="debugWrap" class="field hidden"><textarea id="debugBox" readonly placeholder="Logs de scan"></textarea></div>
-      </div>
-    </section>
-
-    <section id="appsCard" class="panel glass apps-panel">
-      <div class="toolbar">
-        <h2>Mes apps</h2>
-        <div class="toolbar-actions">
-          
-            
-          <button id="btnCollapseAll" class="pill-btn" title="Tout réduire">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
-          </button>
-          <button id="btnScrollTop" class="pill-btn" title="Haut de page">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"></polyline><line x1="12" y1="18" x2="12" y2="6"></line><line x1="4" y1="3" x2="20" y2="3"></line></svg>
-          </button>
-          <div class="pill count"><span id="countLabel">0 app</span></div>
-        </div>
-      </div>
-      <div id="fitWrap" class="fit">
-        <div id="appsList" class="list"></div>
-      </div>
-      <div id="emptyState" class="empty hidden">Aucune application trouvée.</div>
-    </section>
-  </div>
-  <div id="copyToast" class="toast-copy">URL copiée</div>
-
-  <div class="drive-overlay" id="driveLoginOverlay">
-    <div class="drive-card">
-      <div style="text-align:center;font-size:2rem">🔧</div>
-      <div class="drive-title">Centraliseur Apps</div>
-      <div class="drive-sub">Vos données sont stockées sur Google Drive.<br>Connectez-vous pour y accéder.</div>
-      <button class="drive-btn" onclick="driveSignIn()">🔑 Se connecter avec Google</button>
-      <div class="drive-msg" id="driveLoginStatus"></div>
+    <div class="top-actions">
+      <button id="statusChip" class="status-chip" title="Voir le journal"><span id="statusDot" class="dot idle"></span><span id="statusText" class="t">Prêt</span></button>
+      <button id="driveBtn" class="drive-btn sm" title="Google Drive"><span class="ic" data-i="cloud"></span><span class="lbl">Drive</span></button>
+      <button id="themeBtn" class="icon-btn" aria-label="Changer de thème"><span class="ic" data-i="moon"></span></button>
+      <button id="settingsBtn" class="icon-btn" aria-label="Paramètres"><span class="ic" data-i="gear"></span></button>
     </div>
   </div>
-  <div class="drive-overlay" id="driveLoadingOverlay">
-    <div class="drive-spinner"></div>
-    <div style="color:var(--muted);font-size:13px;">Connexion à Google Drive…</div>
-  </div>
-  <div class="drive-overlay" id="driveUpdateOverlay">
-    <div class="drive-card">
-      <div class="drive-title">☁ Mise à jour disponible</div>
-      <div class="drive-sub" id="driveUpdateMsg"></div>
-      <div class="drive-update-actions">
-        <button class="drive-btn ghost" onclick="driveKeepLocal()">Garder local</button>
-        <button class="drive-btn" onclick="driveApplyRemote()">Mettre à jour</button>
+  <div class="progress" id="progress"><i></i></div>
+</header>
+
+<main>
+  <section class="tiles" id="tiles" aria-label="Résumé"></section>
+  <p class="scaninfo" id="scanInfo"></p>
+
+  <section class="toolbar">
+    <div class="tb-row">
+      <div class="search"><span class="ic" data-i="search"></span><input id="search" type="search" placeholder="Rechercher une app… (touche /)" autocomplete="off" /></div>
+      <div class="sel">
+        <select id="sortSel" aria-label="Tri">
+          <option value="recent">Plus récentes</option>
+          <option value="name">Nom (A→Z)</option>
+          <option value="status">Problèmes d’abord</option>
+          <option value="source">Source</option>
+        </select>
+        <select id="groupSel" aria-label="Regroupement">
+          <option value="source">Par source</option>
+          <option value="none">Sans groupe</option>
+        </select>
       </div>
     </div>
+    <div class="tb-row">
+      <div class="chips" id="chips" role="group" aria-label="Filtre source"></div>
+      <div class="btns">
+        <button id="checkBtn" class="sm" title="Re-vérifie statuts et versions sans appeler l’API de scan"><span class="ic" data-i="activity"></span>Vérifier</button>
+        <button id="collapseBtn" class="icon-btn sm" title="Tout réduire" aria-label="Tout réduire"><span class="ic" data-i="up"></span></button>
+        <button id="scanBtn" class="primary sm"><span class="ic" data-i="refresh"></span><span id="scanLbl">Scanner</span></button>
+      </div>
+    </div>
+  </section>
+
+  <div id="list"></div>
+  <div id="empty" class="empty hidden"></div>
+</main>
+
+<!-- Paramètres -->
+<dialog id="settingsDlg" aria-labelledby="settingsTitle">
+  <div class="dlg-head"><h2 id="settingsTitle">Paramètres</h2><button class="icon-btn sm" data-close aria-label="Fermer"><span class="ic" data-i="x"></span></button></div>
+  <div class="dlg-body">
+    <div class="sec">
+      <h3>GitHub Pages</h3>
+      <div class="field"><label for="ghProfiles">Profils / organisations (un par ligne)</label><textarea id="ghProfiles" placeholder="mon-pseudo"></textarea></div>
+      <div class="field"><label for="ghToken">Token GitHub (optionnel)</label>
+        <div class="inline"><input id="ghToken" type="password" autocomplete="off" /><button id="ghTokenToggle" class="icon-btn sm" aria-label="Afficher le token" type="button"><span class="ic" data-i="eye"></span></button></div>
+        <span class="hint">Sans token : 60 requêtes/h seulement. Avec token (aucun scope requis) : 5 000/h et détection du dossier source de Pages.</span></div>
+    </div>
+    <div class="sec">
+      <h3>Hugging Face</h3>
+      <div class="field"><label for="hfProfiles">Auteurs (un par ligne)</label><textarea id="hfProfiles"></textarea></div>
+    </div>
+    <div class="sec">
+      <h3>Koyeb</h3>
+      <div class="field"><label for="koUrls">URLs publiques (une par ligne)</label><textarea id="koUrls" placeholder="https://mon-app.koyeb.app"></textarea></div>
+      <div class="field"><label for="koToken">Token API Koyeb</label><input id="koToken" type="password" autocomplete="off" /></div>
+      <div class="field"><label for="koProxy">URL du proxy Koyeb</label><input id="koProxy" type="text" placeholder="/api/koyeb/apps" /></div>
+    </div>
+    <div class="sec">
+      <h3>Données</h3>
+      <div class="btns">
+        <button id="exportBtn" class="sm"><span class="ic" data-i="download"></span>Exporter (sans tokens)</button>
+        <button id="importBtn" class="sm"><span class="ic" data-i="upload"></span>Importer</button>
+        <button id="clearDataBtn" class="sm danger">Vider les apps</button>
+        <button id="clearProfilesBtn" class="sm danger">Effacer les profils</button>
+      </div>
+      <input id="importFile" type="file" accept="application/json,.json" class="hidden" />
+    </div>
+    <div class="sec" id="logSec">
+      <h3>Journal</h3>
+      <pre class="log" id="logBox">—</pre>
+      <div class="btns"><button id="copyLogBtn" class="sm">Copier le journal</button></div>
+    </div>
   </div>
+</dialog>
 
-  <script>
-    const APP_VERSION = 'v2.0.1';
-    const PROFILE_STORAGE_KEY = 'centraliseur-apps-profiles';
-    const DATA_STORAGE_KEY = 'centraliseur-apps-data';
-    const UI_STORAGE_KEY = 'centraliseur-apps-ui';
-    const KOYEB_URLS_STORAGE_KEY = 'centraliseur-apps-koyeb-urls';
-    const svgWake = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path></svg>';
-    const svgOpen = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
-    const svgCopy = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+<!-- Connexion Drive -->
+<dialog id="loginDlg">
+  <div class="modal-card">
+    <div class="logo" style="margin:0 auto;width:48px;height:48px;font-size:22px">C</div>
+    <h2>Centraliseur Apps</h2>
+    <p class="muted">Tes données sont synchronisées sur Google Drive (espace privé de l’app).<br>Connecte-toi pour les retrouver sur tous tes appareils.</p>
+    <div class="modal-actions">
+      <button id="loginGo" class="primary">Se connecter avec Google</button>
+      <button id="loginSkip">Continuer sans Drive</button>
+    </div>
+    <p class="muted" id="loginMsg" style="font-size:12px"></p>
+  </div>
+</dialog>
 
-    const state = {
-      githubProfiles: [], hfProfiles: [], githubApps: [], hfApps: [], koyebApps: [], githubToken: '', koyebUrls: '', koyebToken: '', koyebProxyUrl: '/api/koyeb/apps',
-      debugOpen: false, sourcesCollapsed: false, expandedItems: {}
-    };
+<!-- Conflit Drive -->
+<dialog id="conflictDlg">
+  <div class="modal-card">
+    <h2>Version plus récente sur Drive</h2>
+    <p class="muted" id="conflictMsg"></p>
+    <div class="modal-actions">
+      <button id="conflictLocal">Garder local</button>
+      <button id="conflictRemote" class="primary">Utiliser Drive</button>
+    </div>
+  </div>
+</dialog>
 
-    const el = {
-      githubProfiles: document.getElementById('githubProfiles'),
-      hfProfiles: document.getElementById('hfProfiles'),
-      githubToken: document.getElementById('githubToken'),
-      koyebUrls: document.getElementById('koyebUrls'),
-      koyebToken: document.getElementById('koyebToken'),
-      koyebProxyUrl: document.getElementById('koyebProxyUrl'),
-      scanBtn: document.getElementById('scanBtn'),
-      clearDataBtn: document.getElementById('clearDataBtn'),
-      toggleGithubToken: document.getElementById('toggleGithubToken'),
-      copyToast: document.getElementById('copyToast'),
-      statusDot: document.getElementById('statusDot'),
-      statusText: document.getElementById('statusText'),
-      sourcesPanel: document.getElementById('sourcesPanel'),
-      sourcesHead: document.getElementById('sourcesHead'),
-      sourcesChev: document.getElementById('sourcesChev'),
-      sourcesStatePill: document.getElementById('sourcesStatePill'),
-      debugToggle: document.getElementById('debugToggle'),
-      debugWrap: document.getElementById('debugWrap'),
-      debugBox: document.getElementById('debugBox'),
-      appsList: document.getElementById('appsList'),
-      emptyState: document.getElementById('emptyState'),
-      countLabel: document.getElementById('countLabel'),
-      btnCollapseAll: document.getElementById('btnCollapseAll'),
-      btnScrollTop: document.getElementById('btnScrollTop'),
-      fitWrap: document.getElementById('fitWrap'),
-    };
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    // ── APP-SPECIFIC DRIVE CONSTANTS & COOKIES ──
-    const DRIVE_FILE_NAME = 'centraliseur_apps.json';
-    const DRIVE_CLIENT_ID = '68487410553-mp697niljk1ov3sn2ucjfe8ckkqds48p.apps.googleusercontent.com';
-    const DRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.appdata';
-    const DRIVE_LS        = 'ca.drive.'; // app-specific prefix
-    const DRIVE_CACHE_KEY = 'ca.drive.cache';
+<script>
+(() => {
+'use strict';
 
-    function _setCookie(name, value) {
-        document.cookie = name + "=" + encodeURIComponent(value) + "; path=/; max-age=31536000; SameSite=None; Secure";
+/* ════════════════════════════════════════════════════════════
+   Constantes
+   ════════════════════════════════════════════════════════════ */
+const APP_VERSION = 'v3.0.0';
+const LS_MAIN  = 'centraliseur-apps-v3';
+const LS_PREFS = 'centraliseur-apps-prefs';
+const LEGACY = { profiles:'centraliseur-apps-profiles', data:'centraliseur-apps-data', koyeb:'centraliseur-apps-koyeb-urls' };
+const DEFAULT_PROXY = '/api/koyeb/apps';
+const AUTO_CHECK_AFTER_MS = 30 * 60 * 1000;
+
+const DRIVE_FILE_NAME = 'centraliseur_apps.json';
+const DRIVE_CLIENT_ID = '68487410553-mp697niljk1ov3sn2ucjfe8ckkqds48p.apps.googleusercontent.com';
+const DRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.appdata';
+const DRIVE_LS        = 'ca.drive.';          // même préfixe qu'en v2 : la session Drive existante est conservée
+const DRIVE_CACHE_KEY = 'ca.drive.cache';
+
+const STATUS = {
+  up:      { label:'En ligne',   rank:4 },
+  down:    { label:'Hors ligne', rank:0 },
+  sleep:   { label:'En veille',  rank:1 },
+  wait:    { label:'Démarrage',  rank:2 },
+  unknown: { label:'Inconnu',    rank:3 },
+};
+const SOURCES = {
+  github: { title:'GitHub Pages',  short:'GH' },
+  hf:     { title:'Hugging Face',  short:'HF' },
+  koyeb:  { title:'Koyeb',         short:'KY' },
+};
+const SRC_KEYS = Object.keys(SOURCES);
+
+/* ════════════════════════════════════════════════════════════
+   Utilitaires
+   ════════════════════════════════════════════════════════════ */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const enc = encodeURIComponent;
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+const arr = v => Array.isArray(v) ? v : [];
+const str = v => (v == null ? '' : String(v));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const parseList = t => [...new Set(str(t).split(/[\n,;]+/).map(s => s.trim()).filter(Boolean))];
+const safeUrl = u => /^https?:\/\//i.test(u) ? u : '#';
+const hostOf = u => { try { return new URL(u).host; } catch { return u; } };
+const showDlg = id => { const d = document.getElementById(id); if (d && !d.open) d.showModal(); };
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+const ls = {
+  get(k){ try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v){ try { localStorage.setItem(k, v); } catch (e) { log('localStorage : ' + e.message); } },
+  del(k){ try { localStorage.removeItem(k); } catch {} },
+};
+const cookie = {
+  get(n){ const m = document.cookie.match(new RegExp('(?:^|; )' + n + '=([^;]*)')); return m ? decodeURIComponent(m[1]) : null; },
+  set(n, v){ document.cookie = `${n}=${enc(v)}; path=/; max-age=31536000; SameSite=Lax; Secure`; },
+  del(n){ document.cookie = `${n}=; path=/; max-age=0; SameSite=Lax; Secure`; },
+};
+
+function fetchT(url, opts = {}, ms = 8000){
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms);
+  return fetch(url, { ...opts, signal: c.signal }).finally(() => clearTimeout(t));
+}
+async function jget(url, opts){
+  try { const r = await fetchT(url, opts, 12000); return r.ok ? await r.json() : null; } catch { return null; }
+}
+async function ping(url){
+  try { await fetchT(url, { mode:'no-cors', cache:'no-store' }, 7000); return true; } catch { return false; }
+}
+/** Exécute worker sur items avec `limit` tâches en parallèle. Ne rejette jamais (retourne {error}). */
+async function pool(items, limit, worker, stop){
+  const out = new Array(items.length);
+  let i = 0;
+  const run = async () => {
+    while (i < items.length && !(stop && stop())) {
+      const idx = i++;
+      try { out[idx] = await worker(items[idx], idx); } catch (e) { out[idx] = { error: e }; }
     }
-    function _getCookie(name) {
-        const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-        if (match) return decodeURIComponent(match[2]);
-        return null;
-    }
-    function _deleteCookie(name) {
-        document.cookie = name + "=; path=/; max-age=-1; SameSite=None; Secure";
-    }
-
-    let driveTokenClient  = null;
-    let driveAccessToken  = null;
-    let driveFileId       = null;
-    let _drivePendingRemote = null;
-    let _drivePollTimer   = null;
-    let _driveSaveTimer   = null;
-    let _driveInitResolve = null;
-    const driveInitReady  = new Promise(res => { _driveInitResolve = res; });
-
-    function driveLoadLibs() {
-      return new Promise(resolve => {
-        let gapiReady = false, gisReady = false;
-        const check = () => { if (gapiReady && gisReady) resolve(); };
-        const s1 = document.createElement('script'); s1.src = 'https://apis.google.com/js/api.js';
-        s1.onload = () => { gapi.load('client', async () => { await gapi.client.init({}); gapiReady = true; check(); }); };
-        document.head.appendChild(s1);
-        const s2 = document.createElement('script'); s2.src = 'https://accounts.google.com/gsi/client';
-        s2.onload = () => { gisReady = true; check(); }; document.head.appendChild(s2);
-      });
-    }
-
-    async function driveInit() {
-      await driveLoadLibs();
-      
-      const hint = _getCookie(DRIVE_LS+'hint') || sessionStorage.getItem(DRIVE_LS+'hint') || localStorage.getItem(DRIVE_LS+'hint') || '';
-      const wasConnected = (_getCookie(DRIVE_LS+'connected') === '1') || (localStorage.getItem(DRIVE_LS+'connected') === '1');
-
-      const cachedToken = _getCookie(DRIVE_LS+'token') || localStorage.getItem(DRIVE_LS+'token');
-      const cachedExp = _getCookie(DRIVE_LS+'token_exp') || localStorage.getItem(DRIVE_LS+'token_exp');
-
-      if (wasConnected && cachedToken && cachedExp && Date.now() < parseInt(cachedExp, 10)) {
-          driveAccessToken = cachedToken;
-          gapi.client.setToken({access_token: driveAccessToken});
-          _driveInitResolve();
-          driveHideLoading(); driveShowLogin(false);
-          updateDriveBadge();
-          setStatus('green', 'Google Drive connecté.');
-          await driveFetchAndCompare();
-          driveStartPolling();
-          return; 
-      }
-
-      driveTokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPE, login_hint: hint,
-        callback: async (resp) => {
-          if (resp.error) { driveHideLoading(); driveShowLogin(true); return; }
-          driveAccessToken = resp.access_token;
-          gapi.client.setToken({ access_token: driveAccessToken });
-          
-          const exp = Date.now() + ((resp.expires_in || 3599) * 1000) - 60000;
-          localStorage.setItem(DRIVE_LS+'token', driveAccessToken);
-          localStorage.setItem(DRIVE_LS+'token_exp', exp.toString());
-          _setCookie(DRIVE_LS+'token', driveAccessToken);
-          _setCookie(DRIVE_LS+'token_exp', exp.toString());
-
-          try {
-            const ui = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + driveAccessToken } });
-            const ud = await ui.json();
-            if (ud.email) { 
-                localStorage.setItem(DRIVE_LS+'hint', ud.email); 
-                sessionStorage.setItem(DRIVE_LS+'hint', ud.email); 
-                _setCookie(DRIVE_LS+'hint', ud.email);
-            }
-          } catch(e) {}
-          
-          localStorage.setItem(DRIVE_LS+'connected', '1'); 
-          sessionStorage.setItem(DRIVE_LS+'connected', '1');
-          _setCookie(DRIVE_LS+'connected', '1');
-          
-          driveHideLoading(); driveShowLogin(false);
-          updateDriveBadge();
-          setStatus('green', 'Google Drive connecté.');
-          await driveFetchAndCompare();
-          driveStartPolling();
-        }
-      });
-      _driveInitResolve();
-      
-      if (wasConnected) { 
-          driveShowLoading(); 
-          setTimeout(()=>{
-            if(!driveAccessToken){
-                driveHideLoading();
-                driveShowLogin(true);
-            }
-          }, 5000);
-          try {
-              driveTokenClient.requestAccessToken({ prompt: 'none' }); 
-          } catch(e) {
-              driveHideLoading();
-              driveShowLogin(true);
-          }
-      }
-      else { driveShowLogin(true); }
-    }
-
-    async function driveSignIn() {
-      await driveInitReady;
-      if (!driveTokenClient) return;
-      driveTokenClient.requestAccessToken({ prompt: 'select_account' });
-    }
-
-    function driveShowLogin(show) {
-      driveHideLoading();
-      document.getElementById('driveLoginOverlay').className = 'drive-overlay' + (show ? ' open' : '');
-    }
-    function driveShowLoading() { document.getElementById('driveLoadingOverlay').className = 'drive-overlay open'; }
-    function driveHideLoading() { document.getElementById('driveLoadingOverlay').className = 'drive-overlay'; }
-
-    async function driveGetFileId() {
-      if (driveFileId) return driveFileId;
-      const cached = localStorage.getItem(DRIVE_LS+'file_id');
-      if (cached) { driveFileId = cached; return driveFileId; }
-      const resp = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${DRIVE_FILE_NAME}'&fields=files(id)`, { headers: { Authorization: 'Bearer ' + driveAccessToken } });
-      const data = await resp.json();
-      if (data.files && data.files.length > 0) { driveFileId = data.files[0].id; localStorage.setItem(DRIVE_LS+'file_id', driveFileId); return driveFileId; }
-      return null;
-    }
-
-    function buildDrivePayload() {
-      return {
-        profiles: { githubProfiles: state.githubProfiles, hfProfiles: state.hfProfiles, githubToken: state.githubToken, koyebUrls: state.koyebUrls, koyebToken: state.koyebToken, koyebProxyUrl: state.koyebProxyUrl },
-        appData:  { githubApps: state.githubApps, hfApps: state.hfApps, koyebApps: state.koyebApps },
-        ui:       { debugOpen: state.debugOpen, sourcesCollapsed: state.sourcesCollapsed, expandedItems: state.expandedItems }
-      };
-    }
-
-    function scheduleDriveSave() {
-      if (!driveAccessToken) return;
-      clearTimeout(_driveSaveTimer);
-      setStatus('orange', 'Sauvegarde Drive…');
-      _driveSaveTimer = setTimeout(async () => {
-        try {
-          const payload = JSON.stringify(buildDrivePayload(), null, 2);
-          const fileId = await driveGetFileId();
-          let url, method;
-          if (fileId) {
-            url = 'https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media&fields=id,modifiedTime';
-            method = 'PATCH';
-          } else {
-            const meta = { name: DRIVE_FILE_NAME, parents: ['appDataFolder'] };
-            const form = new FormData();
-            form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
-            form.append('file', new Blob([payload], { type: 'application/json' }));
-            const cr = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime', { method: 'POST', headers: { Authorization: 'Bearer ' + driveAccessToken }, body: form });
-            const cd = await cr.json();
-            driveFileId = cd.id; localStorage.setItem(DRIVE_LS+'file_id', driveFileId);
-            const iso = cd.modifiedTime || new Date().toISOString();
-            localStorage.setItem(DRIVE_LS+'last_sync_iso', iso); localStorage.setItem(DRIVE_LS+'last_sync', new Date(iso).toLocaleString('fr-FR'));
-            localStorage.setItem(DRIVE_CACHE_KEY, payload);
-            setStatus('green', 'Sauvegardé sur Drive.'); return;
-          }
-          const resp = await fetch(url, { method, headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' }, body: payload });
-          const data = await resp.json();
-          const iso = data.modifiedTime || new Date().toISOString();
-          localStorage.setItem(DRIVE_LS+'last_sync_iso', iso); localStorage.setItem(DRIVE_LS+'last_sync', new Date(iso).toLocaleString('fr-FR'));
-          localStorage.setItem(DRIVE_CACHE_KEY, payload);
-          setStatus('green', 'Sauvegardé sur Drive.');
-        } catch(e) { setStatus('red', 'Erreur sauvegarde Drive.'); }
-      }, 2000);
-    }
-
-    async function driveFetchAndCompare() {
-      if (!driveAccessToken) return;
-      try {
-        const fileId = await driveGetFileId(); if (!fileId) return;
-        const metaResp = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?fields=modifiedTime', { headers: { Authorization: 'Bearer ' + driveAccessToken } });
-        const meta = await metaResp.json();
-        const remoteIso = meta.modifiedTime;
-        const remoteSyncedAt = remoteIso ? new Date(remoteIso) : null;
-        const localIso = localStorage.getItem(DRIVE_LS+'last_sync_iso');
-        const localSyncedAt = localIso ? new Date(localIso) : null;
-
-        if (!localSyncedAt) {
-          // First load — always apply remote silently
-          const contentResp = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media', { headers: { Authorization: 'Bearer ' + driveAccessToken } });
-          const remote = await contentResp.json();
-          localStorage.setItem(DRIVE_LS+'last_sync_iso', remoteIso);
-          localStorage.setItem(DRIVE_LS+'last_sync', new Date(remoteIso).toLocaleString('fr-FR'));
-          localStorage.setItem(DRIVE_CACHE_KEY, JSON.stringify(remote));
-          applyRemoteData(remote); return;
-        }
-
-        if (!remoteSyncedAt || remoteSyncedAt <= localSyncedAt) return;
-        if (document.getElementById('driveUpdateOverlay').classList.contains('open')) return;
-
-        const contentResp = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media', { headers: { Authorization: 'Bearer ' + driveAccessToken } });
-        const remote = await contentResp.json();
-        if (!remote.profiles && !remote.appData) return;
-        _drivePendingRemote = { ...remote, _canonicalIso: remoteIso };
-        const dateStr = remoteSyncedAt.toLocaleString('fr-FR');
-        const remoteCount = ((remote.appData?.githubApps||[]).length + (remote.appData?.hfApps||[]).length + (remote.appData?.koyebApps||[]).length);
-        document.getElementById('driveUpdateMsg').innerHTML = 'Une version plus récente est disponible sur Google Drive.<br><b>Drive :</b> ' + remoteCount + ' app(s) — <i>' + dateStr + '</i>';
-        document.getElementById('driveUpdateOverlay').className = 'drive-overlay open';
-      } catch(e) { /* silent */ }
-    }
-
-    function applyRemoteData(remote) {
-      if (remote.profiles) {
-        state.githubProfiles = remote.profiles.githubProfiles || [];
-        state.hfProfiles     = remote.profiles.hfProfiles     || [];
-        state.githubToken    = remote.profiles.githubToken    || '';
-        state.koyebUrls      = remote.profiles.koyebUrls      || '';
-        state.koyebToken     = remote.profiles.koyebToken     || '';
-        state.koyebProxyUrl  = remote.profiles.koyebProxyUrl  || '/api/koyeb/apps';
-        hydrate();
-      }
-      if (remote.appData) {
-        state.githubApps = Array.isArray(remote.appData.githubApps) ? remote.appData.githubApps : [];
-        state.hfApps     = Array.isArray(remote.appData.hfApps)     ? remote.appData.hfApps     : [];
-        state.koyebApps  = Array.isArray(remote.appData.koyebApps)  ? remote.appData.koyebApps  : [];
-      }
-      if (remote.ui) {
-        state.debugOpen          = !!remote.ui.debugOpen;
-        state.sourcesCollapsed   = !!remote.ui.sourcesCollapsed;
-        state.expandedItems      = remote.ui.expandedItems || {};
-      }
-      renderDebug(); renderSourcesPanel(); renderList();
-      setStatus('green', 'Données chargées depuis Drive.');
-    }
-
-    function driveKeepLocal() {
-      document.getElementById('driveUpdateOverlay').className = 'drive-overlay';
-      _drivePendingRemote = null;
-      scheduleDriveSave();
-    }
-    function driveApplyRemote() {
-      const remote = _drivePendingRemote; _drivePendingRemote = null;
-      if (!remote) return;
-      document.getElementById('driveUpdateOverlay').className = 'drive-overlay';
-      const iso = remote._canonicalIso || new Date().toISOString();
-      localStorage.setItem(DRIVE_LS+'last_sync_iso', iso);
-      localStorage.setItem(DRIVE_LS+'last_sync', new Date(iso).toLocaleString('fr-FR'));
-      localStorage.setItem(DRIVE_CACHE_KEY, JSON.stringify(remote));
-      applyRemoteData(remote);
-    }
-
-    function driveStartPolling() {
-      if (_drivePollTimer) return;
-      _drivePollTimer = setInterval(() => { if (document.visibilityState === 'visible' && driveAccessToken) driveFetchAndCompare(); }, 15000);
-    }
-    function driveStopPolling() { if (_drivePollTimer) { clearInterval(_drivePollTimer); _drivePollTimer = null; } }
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && driveAccessToken) driveFetchAndCompare();
-      else driveStopPolling();
-    });
-
-    // Load local cache immediately for instant display
-    (function loadCache() {
-      try {
-        const cached = JSON.parse(localStorage.getItem(DRIVE_CACHE_KEY));
-        if (!cached) return;
-        if (cached.profiles) {
-          state.githubProfiles = cached.profiles.githubProfiles || [];
-          state.hfProfiles     = cached.profiles.hfProfiles     || [];
-          state.githubToken    = cached.profiles.githubToken    || '';
-          state.koyebUrls      = cached.profiles.koyebUrls      || '';
-          state.koyebToken     = cached.profiles.koyebToken     || '';
-          state.koyebProxyUrl  = cached.profiles.koyebProxyUrl  || '/api/koyeb/apps';
-        }
-        if (cached.appData) {
-          state.githubApps = Array.isArray(cached.appData.githubApps) ? cached.appData.githubApps : [];
-          state.hfApps     = Array.isArray(cached.appData.hfApps)     ? cached.appData.hfApps     : [];
-          state.koyebApps  = Array.isArray(cached.appData.koyebApps)  ? cached.appData.koyebApps  : [];
-        }
-        if (cached.ui) {
-          state.debugOpen        = !!cached.ui.debugOpen;
-          state.sourcesCollapsed = !!cached.ui.sourcesCollapsed;
-          state.expandedItems    = cached.ui.expandedItems || {};
-        }
-      } catch(e) {}
-    })();
-
-    init();
-    driveInit();
-
-    function init(){
-
-  let copyToastTimer = null;
-  function showCopyToast(message){
-    if(!el.copyToast) return;
-    el.copyToast.textContent = message || 'URL copiée';
-    el.copyToast.classList.add('show');
-    clearTimeout(copyToastTimer);
-    copyToastTimer = setTimeout(() => el.copyToast.classList.remove('show'), 1800);
-  }
-  document.getElementById('copyUrlBtn').addEventListener('click', function(){
-    const url = window.location.href;
-    navigator.clipboard.writeText(url).then(()=>{
-      setStatus('green', 'URL copiée');
-      showCopyToast('URL copiée');
-      setTimeout(()=>setStatus('orange', 'Prêt.'), 1800);
-    }).catch(()=>{
-      prompt('URL du centraliseur :', url);
-      showCopyToast('URL copiée');
-    });
-  });
-
-      loadProfiles();
-      loadAppData();
-      loadUi();
-      bind();
-      hydrate();
-      renderDebug();
-      renderSourcesPanel();
-      renderList();
-      setStatus('orange', 'Prêt.');
-      const _vLabel = document.getElementById('appVersionLabel'); if(_vLabel) _vLabel.textContent = APP_VERSION;
-    }
-
-    function bind(){
-      el.scanBtn.addEventListener('click', scanAll);
-      el.clearDataBtn.addEventListener('click', clearAppData);
-      el.toggleGithubToken.addEventListener('click', function(){
-        const nextType = el.githubToken.type === 'password' ? 'text' : 'password';
-        el.githubToken.type = nextType;
-        el.toggleGithubToken.textContent = nextType === 'password' ? '👁' : '🙈';
-      });
-      el.btnCollapseAll.addEventListener('click', () => { state.expandedItems = {}; saveUi(); renderList(); });
-      el.btnScrollTop.addEventListener('click', () => { el.fitWrap.scrollTo({ top:0, behavior:'smooth' }); window.scrollTo({ top:0, behavior:'smooth' }); });
-      el.sourcesHead.addEventListener('click', function(e){ e.stopPropagation(); if(e.target.closest('button') || e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA') return; state.sourcesCollapsed = !state.sourcesCollapsed; renderSourcesPanel(); saveUi(); });
-      el.debugToggle.addEventListener('click', function(){ state.debugOpen = !state.debugOpen; renderDebug(); saveUi(); });
-      [el.githubProfiles, el.hfProfiles, el.githubToken, el.koyebUrls, el.koyebToken, el.koyebProxyUrl].forEach(inp => { inp.addEventListener('change', saveProfiles); inp.addEventListener('input', saveProfiles); });
-      el.appsList.addEventListener('click', onListClick);
-    }
-
-    function onListClick(e){
-      const actionEl = e.target.closest('[data-action]');
-      if(actionEl && !actionEl.dataset.key){
-        e.stopPropagation();
-        const act = actionEl.dataset.action;
-        if(act === 'scan-github') return void scanGithubOnly();
-        if(act === 'scan-hf') return void scanHfOnly();
-        if(act === 'scan-koyeb') return void scanKoyebOnly();
-        return;
-      }
-      const key = actionEl?.dataset.key || e.target.closest('.item-main')?.dataset.key;
-      if(!key) return;
-      if(actionEl){
-        e.stopPropagation();
-        handleRowAction(actionEl.dataset.action, key);
-        return;
-      }
-      toggleItem(key);
-    }
-
-    function setStatus(color, text){ el.statusDot.className = 'dot ' + color; el.statusText.textContent = text; }
-    function logDebug(value){ el.debugBox.value = typeof value === 'string' ? value : JSON.stringify(value, null, 2); }
-    function renderDebug(){ el.debugWrap.classList.toggle('hidden', !state.debugOpen); el.debugToggle.textContent = state.debugOpen ? 'Masquer debug' : 'Afficher debug'; }
-    function renderSourcesPanel(){
-    const body = document.getElementById('sourcesBody');
-    if(!state.sourcesCollapsed){
-      body.style.maxHeight = '60vh';
-      body.style.overflowY = 'auto';
-    } else {
-      body.style.maxHeight = 'none';
-      body.style.overflowY = 'visible';
-    };
- el.sourcesPanel.classList.toggle('collapsed', state.sourcesCollapsed); el.sourcesChev.textContent = state.sourcesCollapsed ? '+' : '-'; updateSourcesPill(); }
-    function updateSourcesPill(){
-      const configured = parseProfiles(el.githubProfiles.value).length + parseProfiles(el.hfProfiles.value).length + ((el.koyebToken.value || '').trim() ? 1 : 0) + ((el.koyebProxyUrl.value || '').trim() ? 1 : 0);
-      el.sourcesStatePill.textContent = configured ? 'Configuré' : 'À configurer';
-      el.sourcesStatePill.className = 'pill ' + (configured ? 'connected' : 'disconnected');
-    }
-    function hydrate(){ el.githubProfiles.value = state.githubProfiles.join('\n'); el.hfProfiles.value = state.hfProfiles.join('\n'); el.githubToken.value = state.githubToken || ''; el.koyebUrls.value = state.koyebUrls || ''; el.koyebToken.value = state.koyebToken || ''; el.koyebProxyUrl.value = state.koyebProxyUrl || '/api/koyeb/apps'; updateSourcesPill(); }
-    function parseProfiles(text){ return [...new Set(String(text||'').split(/[\n,;]+/g).map(v=>v.trim()).filter(Boolean))]; }
-    function escapeHtml(v){ return String(v ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
-    function normalizeSourcePath(value){ const v = String(value || '/').trim(); return v === '/' ? '' : v.replace(/^\/+|\/+$/g, ''); }
-    function formatDate(value){ if(!value) return '—'; const d = new Date(value); if(Number.isNaN(d.getTime())) return String(value); return d.toLocaleDateString('fr-FR'); }
-    function rowKey(row){ return row.key || `${row.source}::${row.link}`; }
-    function isExpanded(key){ return !!state.expandedItems[key]; }
-    function toggleItem(key){ state.expandedItems[key] = !state.expandedItems[key]; if(!state.expandedItems[key]) delete state.expandedItems[key]; saveUi(); renderList(); ensureExpandedVisible(key); }
-    function ensureExpandedVisible(key){
-      requestAnimationFrame(() => {
-        const card = el.appsList.querySelector(`[data-card-key="${CSS.escape(key)}"]`);
-        if(!card || !card.classList.contains('open')) return;
-        const r = card.getBoundingClientRect();
-        const wrap = el.fitWrap.getBoundingClientRect();
-        if(r.bottom > wrap.bottom - 8) el.fitWrap.scrollBy({ top: r.bottom - wrap.bottom + 16, behavior: 'smooth' });
-      });
-    }
-
-    function saveProfiles(){
-      state.githubProfiles = parseProfiles(el.githubProfiles.value);
-      state.hfProfiles = parseProfiles(el.hfProfiles.value);
-      state.githubToken = String(el.githubToken.value || '');
-      state.koyebUrls = String(el.koyebUrls.value || '');
-      state.koyebToken = String(el.koyebToken.value || '');
-      state.koyebProxyUrl = String(el.koyebProxyUrl.value || '/api/koyeb/apps');
-      // Keep local storage as cache only
-      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({ version: APP_VERSION, githubProfiles: state.githubProfiles, hfProfiles: state.hfProfiles, githubToken: state.githubToken, koyebUrls: state.koyebUrls, koyebToken: state.koyebToken, koyebProxyUrl: state.koyebProxyUrl }));
-      localStorage.setItem(KOYEB_URLS_STORAGE_KEY, state.koyebUrls);
-      updateSourcesPill();
-      scheduleDriveSave();
-    }
-    function saveAppData(){
-      localStorage.setItem(DATA_STORAGE_KEY, JSON.stringify({ version: APP_VERSION, githubApps: state.githubApps, hfApps: state.hfApps, koyebApps: state.koyebApps, savedAt: new Date().toISOString() }));
-      scheduleDriveSave();
-    }
-    function saveUi(){
-      localStorage.setItem(UI_STORAGE_KEY, JSON.stringify({ debugOpen: state.debugOpen, sourcesCollapsed: state.sourcesCollapsed, expandedItems: state.expandedItems }));
-      scheduleDriveSave();
-    }
-    function loadProfiles(){ try{ const raw = localStorage.getItem(PROFILE_STORAGE_KEY); if(raw){ const data = JSON.parse(raw); state.githubProfiles = Array.isArray(data.githubProfiles) ? data.githubProfiles : []; state.hfProfiles = Array.isArray(data.hfProfiles) ? data.hfProfiles : []; state.githubToken = String(data.githubToken || ''); state.koyebUrls = String(data.koyebUrls || ''); state.koyebToken = String(data.koyebToken || ''); state.koyebProxyUrl = String(data.koyebProxyUrl || '/api/koyeb/apps'); } const standaloneKoyebUrls = localStorage.getItem(KOYEB_URLS_STORAGE_KEY); if(standaloneKoyebUrls) state.koyebUrls = String(standaloneKoyebUrls || state.koyebUrls || ''); }catch(_){} }
-    function loadAppData(){ try{ const raw = localStorage.getItem(DATA_STORAGE_KEY); if(!raw) return; const data = JSON.parse(raw); state.githubApps = Array.isArray(data.githubApps) ? data.githubApps : []; state.hfApps = Array.isArray(data.hfApps) ? data.hfApps.map(row => { const v = String(row?.appVersion || row?.version || '').trim(); if(/^[a-f0-9]{7}$/i.test(v)){ if(row.appVersion) row.appVersion = ''; else row.version = ''; } return row; }) : []; state.koyebApps = Array.isArray(data.koyebApps) ? data.koyebApps : []; }catch(_){} }
-    function loadUi(){ try{ const raw = localStorage.getItem(UI_STORAGE_KEY); if(!raw) return; const data = JSON.parse(raw); state.debugOpen = !!data.debugOpen; state.sourcesCollapsed = !!data.sourcesCollapsed; state.expandedItems = data.expandedItems || {}; }catch(_){} }
-    function clearProfiles(){ state.githubProfiles=[]; state.hfProfiles=[]; state.githubToken=''; state.koyebUrls=''; state.koyebToken=''; state.koyebProxyUrl='/api/koyeb/apps'; localStorage.removeItem(PROFILE_STORAGE_KEY); hydrate(); setStatus('orange','Profils effacés.'); }
-    function clearAppData(){ localStorage.removeItem(DATA_STORAGE_KEY); state.githubApps=[]; state.hfApps=[]; state.koyebApps=[]; state.expandedItems={}; saveUi(); renderList(); setStatus('orange','Données app supprimées du LocalStorage.'); }
-    function getGitHubHeaders(){ const headers={ 'Accept':'application/vnd.github+json' }; const token=(el.githubToken.value||'').trim(); if(token) headers['Authorization']=`Bearer ${token}`; return headers; }
-
-    async function fetchJson(url, options={}){ const res = await fetch(url, options); if(!res.ok){ let details=''; try{ details = await res.text(); }catch{} throw new Error(`HTTP ${res.status} - ${url}${details ? ' - ' + details.slice(0, 240) : ''}`); } return res.json(); }
-    async function fetchJsonSafe(url, options={}){ try{ const res = await fetch(url, options); if(!res.ok) return null; return await res.json(); }catch{return null;} }
-    async function bestEffortCheck(url, timeoutMs=5000){ const controller = new AbortController(); const timer=setTimeout(()=>controller.abort(), timeoutMs); try{ await fetch(url,{method:'GET',mode:'no-cors',cache:'no-store',signal:controller.signal}); clearTimeout(timer); return true; }catch{ clearTimeout(timer); return false; } }
-
-    async function getGitHubAccount(owner){ return fetchJson(`https://api.github.com/users/${encodeURIComponent(owner)}`, { headers:getGitHubHeaders() }); }
-    async function listGitHubRepos(owner){
-      const account = await getGitHubAccount(owner);
-      const baseUrl = account.type === 'Organization' ? `https://api.github.com/orgs/${encodeURIComponent(owner)}/repos` : `https://api.github.com/users/${encodeURIComponent(owner)}/repos`;
-      let page=1; const perPage=100; const all=[];
-      while(page<=5){ const url=`${baseUrl}?per_page=${perPage}&page=${page}&sort=pushed&direction=desc`; const rows=await fetchJson(url,{ headers:getGitHubHeaders() }); all.push(...rows); if(!Array.isArray(rows)||rows.length<perPage) break; page += 1; }
-      return all;
-    }
-    function isSpecialPagesRepo(owner, repoName){ return repoName.toLowerCase() === `${owner}`.toLowerCase() + '.github.io'; }
-    function isGitHubPagesCandidate(owner, repo){ if(repo.fork || repo.private || repo.archived || repo.disabled) return false; if(isSpecialPagesRepo(owner, repo.name)) return true; if(repo.has_pages) return true; if(repo.homepage && /github\.io/i.test(repo.homepage)) return true; return false; }
-    async function getGitHubPagesInfo(owner, repo){
-      const info = await fetchJsonSafe(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo.name)}/pages`, { headers:getGitHubHeaders() });
-      const fallbackUrl = repo.homepage && /^https?:\/\//i.test(repo.homepage) ? repo.homepage : (isSpecialPagesRepo(owner, repo.name) ? `https://${owner}.github.io/` : `https://${owner}.github.io/${repo.name}/`);
-      return { htmlUrl: String(info?.html_url || fallbackUrl || '').replace(/\/+$/, '') + '/', sourceBranch: info?.source?.branch || repo.default_branch || 'main', sourcePath: normalizeSourcePath(info?.source?.path || '') };
-    }
-    function relFromSource(fullPath, sourcePath){ const cleanFull = String(fullPath || '').replace(/^\/+/, ''); const cleanSource = normalizeSourcePath(sourcePath); if(!cleanSource) return cleanFull; if(cleanFull===cleanSource) return ''; if(cleanFull.startsWith(cleanSource + '/')) return cleanFull.slice(cleanSource.length + 1); return cleanFull; }
-    function buildGitHubPageUrl(baseUrl, relativePath){ const normalized=String(relativePath || '').replace(/^\/+/, ''); if(!normalized || normalized.toLowerCase()==='index.html') return baseUrl; if(normalized.toLowerCase().endsWith('/index.html')) return baseUrl + normalized.slice(0,-10); return baseUrl + normalized; }
-    function decodeBase64Unicode(base64){ try{ const cleaned=base64.replace(/\n/g,''); const binary=atob(cleaned); const bytes=Uint8Array.from(binary, c=>c.charCodeAt(0)); return new TextDecoder().decode(bytes); }catch{return '';} }
-    function extractVersionFromText(fileName, text){ if(!text) return null; if(fileName==='package.json'){ try{ const json=JSON.parse(text); if(json.version) return String(json.version); }catch{} } const patterns=[/(^|\n)\s*version\s*[:=]\s*["']?([A-Za-z0-9._-]+)["']?/i,/(^|\n)\s*app_version\s*[:=]\s*["']?([A-Za-z0-9._-]+)["']?/i,/(^|\n)\s*__version__\s*=\s*["']([^"']+)["']/i,/(^|\n)\s*VERSION\s*=\s*["']([^"']+)["']/i]; for(const rx of patterns){ const m=text.match(rx); if(m?.[2]) return m[2].trim(); } if(fileName==='version.txt'){ const first=text.trim().split(/\r?\n/)[0]; if(first) return first.trim(); } return null; }
-    async function fetchGitHubLiveAppVersion(pageUrl){
-      try{
-        const res = await fetch(pageUrl, { cache:'no-store' });
-        if(!res.ok) return null;
-        const text = await res.text();
-        const m = text.match(/const\s+APP_VERSION\s*=\s*['"\`]([^'"\`]+)['"\`]/);
-        return m?.[1] ? String(m[1]).trim() : null;
-      }catch(e){ return null; }
-    }
-
-    async function detectGitHubVersion(owner, repoName){ const headers=getGitHubHeaders(); const release=await fetchJsonSafe(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/releases/latest`, { headers }); if(release?.tag_name) return release.tag_name; const tags=await fetchJsonSafe(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/tags?per_page=1`, { headers }); if(Array.isArray(tags)&&tags[0]?.name) return tags[0].name; const candidates=['package.json','pyproject.toml','manifest.json','version.txt','README.md']; for(const fileName of candidates){ const contentInfo=await fetchJsonSafe(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/contents/${encodeURIComponent(fileName)}`, { headers }); if(contentInfo?.content){ const text=decodeBase64Unicode(contentInfo.content); const found=extractVersionFromText(fileName, text); if(found) return found; } } return '—'; }
-    async function fetchRepoContents(owner, repoName, path, branch){ const encodedPath = path ? `/${path.split('/').map(encodeURIComponent).join('/')}` : ''; const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/contents${encodedPath}?ref=${encodeURIComponent(branch)}`; return fetchJsonSafe(url,{ headers:getGitHubHeaders() }); }
-    async function listRepoHtmlFiles(owner, repoName, branch, sourcePath){ const startPath=normalizeSourcePath(sourcePath); const queue=[startPath].filter(v => v !== undefined); const htmlFiles=[]; const visited=new Set(); let inspectedDirs=0; while(queue.length && inspectedDirs<120 && htmlFiles.length<500){ const current=queue.shift() || ''; if(visited.has(current)) continue; visited.add(current); inspectedDirs += 1; const items=await fetchRepoContents(owner, repoName, current, branch); if(!items) continue; const list=Array.isArray(items) ? items : [items]; for(const item of list){ if(item?.type==='dir'){ const nextPath=String(item.path || ''); if(!visited.has(nextPath)) queue.push(nextPath); } else if(item?.type==='file' && /\.html?$/i.test(item.path || '')) { htmlFiles.push(String(item.path)); } } } return htmlFiles.sort((a,b)=>a.localeCompare(b, 'fr')); }
-    async function scanGitHubOwner(owner){
-      const repos=await listGitHubRepos(owner); const candidates=repos.filter(repo => isGitHubPagesCandidate(owner, repo)); const rows=[]; const errors=[];
-      for(const repo of candidates){
-        try{
-          const pagesInfo=await getGitHubPagesInfo(owner, repo); const htmlFiles=await listRepoHtmlFiles(owner, repo.name, pagesInfo.sourceBranch, pagesInfo.sourcePath);
-          if(!htmlFiles.length){ const link=pagesInfo.htmlUrl; const status=await bestEffortCheck(link); const liveVer=await fetchGitHubLiveAppVersion(link); rows.push({ key:`github::${link}`, source:'github', owner, ownerLabel:`${owner} · ${repo.name}`, name:repo.name, pagePath:'index.html', version: liveVer || '—', updatedAt:repo.pushed_at || repo.updated_at || null, link, metaUrl:repo.html_url, sourceInfo:`${owner}/${repo.name}`, status }); continue; }
-          for(const fullPath of htmlFiles){ const relativePath=relFromSource(fullPath, pagesInfo.sourcePath); const link=buildGitHubPageUrl(pagesInfo.htmlUrl, relativePath); const status=await bestEffortCheck(link); const liveVer=await fetchGitHubLiveAppVersion(link); rows.push({ key:`github::${link}`, source:'github', owner, ownerLabel:`${owner} · ${repo.name}`, name:repo.name, pagePath:relativePath || 'index.html', version: liveVer || '—', updatedAt:repo.pushed_at || repo.updated_at || null, link, metaUrl:repo.html_url, sourceInfo:`${owner}/${repo.name}`, status }); }
-        }catch(e){ console.error(e); errors.push(`${owner}/${repo.name}`); const fallbackLink = isSpecialPagesRepo(owner, repo.name) ? `https://${owner}.github.io/` : (repo.homepage && /^https?:\/\//i.test(repo.homepage) ? repo.homepage : `https://${owner}.github.io/${repo.name}/`); const status = await bestEffortCheck(fallbackLink).catch(()=>null); rows.push({ key:`github::${fallbackLink}`, source:'github', owner, ownerLabel:`${owner} · ${repo.name}`, name:repo.name, pagePath:'index.html', version:'—', updatedAt:repo.pushed_at || repo.updated_at || null, link:fallbackLink, metaUrl:repo.html_url, sourceInfo:`${owner}/${repo.name}`, status }); }
-      }
-      return { rows, errors };
-    }
-    async function listHfSpaces(author){ const base=`https://huggingface.co/api/spaces?author=${encodeURIComponent(author)}&limit=100`; const full=await fetchJsonSafe(`${base}&full=true`); if(Array.isArray(full)) return full; const basic=await fetchJsonSafe(base); return Array.isArray(basic) ? basic : []; }
-    function normalizeHfSpace(space, fallbackAuthor){ const rawId=String(space?.id || '').trim(); if(rawId.includes('/')){ const [author, ...rest]=rawId.split('/'); const name=rest.join('/'); return { id:rawId, author, name:name || rawId }; } const author=String(space?.author || fallbackAuthor || '').trim(); const name=String(space?.name || rawId || '').trim(); return { id: author && name ? `${author}/${name}` : rawId, author, name:name || rawId }; }
-    function buildHfRepoUrl(spaceId){ const [author, ...rest]=String(spaceId).split('/'); const name=rest.join('/'); return `https://huggingface.co/spaces/${encodeURIComponent(author)}/${encodeURIComponent(name)}`; }
-    function toHfSubdomain(author, name){ return `${author}-${name}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, ''); }
-    function buildHfPublicUrl(spaceId, info={}, listedSpace={}){ const [author, ...rest]=String(spaceId).split('/'); const name=rest.join('/'); const customDomain = info?.customDomain || info?.custom_domain || listedSpace?.customDomain || listedSpace?.custom_domain || info?.domain || listedSpace?.domain; if(customDomain) return /^https?:\/\//i.test(customDomain) ? customDomain : `https://${customDomain}`; const host = info?.host || info?.spaceHost || info?.runtime?.host || listedSpace?.host || listedSpace?.spaceHost; if(host) return /^https?:\/\//i.test(host) ? host : `https://${host}`; return `https://${toHfSubdomain(author, name)}.hf.space`; }
-    function buildHfApiUrl(spaceId){ const [author, ...rest]=String(spaceId).split('/'); const name=rest.join('/'); return `https://huggingface.co/api/spaces/${encodeURIComponent(author)}/${encodeURIComponent(name)}`; }
-    async function fetchHfLatestCommitText(spaceId){ try{ const [author, ...rest]=String(spaceId).split('/'); const name=rest.join('/'); const url=`https://huggingface.co/api/spaces/${encodeURIComponent(author)}/${encodeURIComponent(name)}/commits/main`; const data=await fetchJsonSafe(url); if(!Array.isArray(data) || !data.length) return null; const title = data[0]?.title || data[0]?.message || null; if(!title) return null; const s = String(title).split('\n')[0].trim(); if(!s || /^[a-f0-9]{7,40}$/i.test(s)) return null; return s; }catch(e){ return null; } }
-    function extractHfVersion(info, listedSpace){ const candidates=[info?.cardData?.version, info?.cardData?.app_version, info?.version, listedSpace?.cardData?.version, listedSpace?.version].filter(Boolean); if(candidates.length) return String(candidates[0]); const sha=info?.sha || listedSpace?.sha; if(sha) return String(sha).slice(0,7); return '—'; }
-    function resolveHfStatus(info){ const stage=String(info?.runtime?.stage || info?.stage || '').toUpperCase(); if(!stage) return null; if(['RUNNING','BUILDING','STARTING','PREPARING'].includes(stage)) return true; if(['PAUSED','STOPPED','FAILED','ERROR','SLEEPING','SLEEP','RUNTIME_ERROR'].includes(stage)) return false; return null; }
-    async function scanHfAuthor(author){ const spaces=await listHfSpaces(author); const rows=[]; for(const space of spaces){ try{ const normalized=normalizeHfSpace(space, author); if(!normalized.id || !normalized.author || !normalized.name) continue; const info=await fetchJsonSafe(buildHfApiUrl(normalized.id)); const link=buildHfPublicUrl(normalized.id, info, space); let status=resolveHfStatus(info); if(status===null) status = await bestEffortCheck(link); const commitText = await fetchHfLatestCommitText(normalized.id); const resolvedVersion = commitText || extractHfVersion(info, space); rows.push({ key:`hf::${link}`, source:'hf', owner:normalized.author, ownerLabel:normalized.author, name:normalized.name, appVersion: commitText || '', version: resolvedVersion, updatedAt:info?.lastModified || space?.lastModified || info?.last_modified || null, link, metaUrl:buildHfRepoUrl(normalized.id), sourceInfo:normalized.id, status }); }catch(e){ console.error(e); } } return rows; }
-    function dedupeRows(rows){ const map=new Map(); for(const row of rows){ const key=row.key || `${row.source}::${row.link}`; if(!map.has(key)) map.set(key,row); } return [...map.values()]; }
-    function sortRows(rows){ return [...rows].sort((a,b)=>{ const da=a.updatedAt ? new Date(a.updatedAt).getTime() : 0; const db=b.updatedAt ? new Date(b.updatedAt).getTime() : 0; return db - da || String(a.name).localeCompare(String(b.name),'fr') || String(a.pagePath || '').localeCompare(String(b.pagePath || ''),'fr'); }); }
-
-    function getKoyebHeaders(){
-      return {
-        'Authorization': `Bearer ${(el.koyebToken.value || '').trim()}`,
-        'Accept': 'application/json'
-      };
-    }
-    function koyebStatusToBool(value){
-      const v = String(value || '').toLowerCase();
-      if(['healthy','running','resuming','starting','degraded'].includes(v)) return true;
-      if(['paused','pausing','unhealthy','error','failed','stopped'].includes(v)) return false;
-      return null;
-    }
-    function koyebAppLink(app){
-      const domains = Array.isArray(app?.domains) ? app.domains : [];
-      const first = domains.find(d => d?.name) || null;
-      if(first?.name) return `https://${first.name}/`;
-      return '';
-    }
-    async function listKoyebApps(){
-      const token = (el.koyebToken.value || '').trim();
-      const proxyUrl = (el.koyebProxyUrl.value || '').trim();
-      if(!token) throw new Error('Token Koyeb manquant');
-      if(!proxyUrl) throw new Error('Proxy Koyeb manquant');
-      const res = await fetch(proxyUrl, {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json', 'Accept':'application/json' },
-        body: JSON.stringify({ provider:'koyeb', token })
-      });
-      if(!res.ok){
-        let details='';
-        try{ details = await res.text(); }catch{}
-        throw new Error(`Proxy HTTP ${res.status}${details ? ' - ' + details.slice(0, 240) : ''}`);
-      }
-      const data = await res.json();
-      if(Array.isArray(data?.apps)) return data.apps;
-      if(Array.isArray(data?.items)) return data.items;
-      if(Array.isArray(data)) return data;
-      if(Array.isArray(data?.data)) return data.data;
-      throw new Error('Réponse proxy Koyeb inattendue');
-    }
-    async function scanKoyeb(){
-      const urls = (el.koyebUrls ? el.koyebUrls.value.trim().split(/[\r\n,]+/).map(u=>u.trim()).filter(Boolean) : []);
-      if(urls.length === 0 && !el.koyebToken.value.trim()) return [];
-      if(el.koyebToken.value.trim()){
-        try{
-          const apps = await listKoyebApps();
-          const rows = [];
-          for(const app of apps){
-            const link = koyebAppLink(app);
-            if(!link) continue;
-            const status = koyebStatusToBool(app?.status);
-            rows.push({
-              key:`koyeb::${link}`,
-              source:'koyeb',
-              owner:'koyeb',
-              ownerLabel:'Koyeb',
-              name:String(app?.name || link.replace(/^https?:\/\//,'')),
-              version:String(app?.appVersion || app?.version || '—'),
-              updatedAt:app?.updated_at || app?.updatedAt || app?.created_at || null,
-              link,
-              metaUrl:'',
-              sourceInfo:String(app?.id || 'koyeb-app'),
-              status: status === null ? await bestEffortCheck(link) : status
-            });
-          }
-          return rows;
-        }catch(e){
-          logDebug('Koyeb API erreur: ' + String(e.message));
-        }
-      }
-      const rows = [];
-      for(const url of urls){
-        const cleanUrl = url.replace(/^https?:\/\//i, 'https://').replace(/\s*/g, '');
-        if(!cleanUrl.match(/koyeb\.app/i)) continue;
-        try{
-          const status = await bestEffortCheck(cleanUrl);
-          const name = cleanUrl.match(/[\/]([^/\/]+)\.?koyeb\.app/)?.[1] || cleanUrl;
-          rows.push({
-            key:`koyeb::${cleanUrl}`,
-            source:'koyeb',
-            owner:'koyeb',
-            ownerLabel:'Koyeb',
-            name:name,
-            version:'—',
-            updatedAt:null,
-            link:cleanUrl,
-            metaUrl:'',
-            sourceInfo:cleanUrl,
-            status
-          });
-        }catch{}
-      }
-      return rows;
-    }
-
-    async function scanGithubOnly(){
-      saveProfiles();
-      const githubProfiles=parseProfiles(el.githubProfiles.value);
-      state.githubApps=[]; renderList();
-      if(!githubProfiles.length){ setStatus('red', 'Ajoute au moins une source GitHub.'); return; }
-      setStatus('orange', 'Scan GitHub en cours...');
-      const githubApps=[]; const errors=[];
-      for(let i=0;i<githubProfiles.length;i++){
-        const owner=githubProfiles[i];
-        try{ const result=await scanGitHubOwner(owner); githubApps.push(...result.rows); errors.push(...result.errors.map(e => `GitHub repo: ${e}`)); state.githubApps=sortRows(dedupeRows(githubApps)); renderList(); }
-        catch(e){ console.error(e); errors.push(`GitHub profil: ${owner}`); }
-      }
-      state.githubApps=sortRows(dedupeRows(githubApps)); saveAppData(); saveUi(); renderList();
-      setStatus(errors.length ? 'orange' : 'green', errors.length ? 'Scan GitHub terminé avec erreurs partielles.' : 'GitHub synchronisé avec succès.');
-    }
-
-    async function scanHfOnly(){
-      saveProfiles();
-      const hfProfiles=parseProfiles(el.hfProfiles.value);
-      state.hfApps=[]; renderList();
-      if(!hfProfiles.length){ setStatus('red', 'Ajoute au moins une source Hugging Face.'); return; }
-      setStatus('orange', 'Scan Hugging Face en cours...');
-      const hfApps=[]; const errors=[];
-      for(let i=0;i<hfProfiles.length;i++){
-        const author=hfProfiles[i];
-        try{ const rows=await scanHfAuthor(author); hfApps.push(...rows); state.hfApps=sortRows(dedupeRows(hfApps)); renderList(); }
-        catch(e){ console.error(e); errors.push(`Hugging Face: ${author}`); }
-      }
-      state.hfApps=sortRows(dedupeRows(hfApps)); saveAppData(); saveUi(); renderList();
-      setStatus(errors.length ? 'orange' : 'green', errors.length ? 'Scan HF terminé avec erreurs partielles.' : 'Hugging Face synchronisé avec succès.');
-    }
-
-    async function scanKoyebOnly(){
-      saveProfiles();
-      state.koyebApps=[]; renderList();
-      const hasKoyeb = !!(el.koyebToken.value.trim() || el.koyebUrls.value.trim());
-      if(!hasKoyeb){ setStatus('red', 'Ajoute au moins une URL Koyeb.'); return; }
-      setStatus('orange', 'Scan Koyeb en cours...');
-      try{ const rows=await scanKoyeb(); state.koyebApps=sortRows(dedupeRows(rows)); saveAppData(); saveUi(); renderList(); setStatus(rows.length ? 'green' : 'orange', rows.length ? 'Koyeb synchronisé avec succès.' : 'Aucune app Koyeb détectée.'); }
-      catch(e){ console.error(e); setStatus('red', 'Koyeb erreur de scan.'); }
-    }
-
-    async function scanAll(){
-      saveProfiles();
-      const githubProfiles=parseProfiles(el.githubProfiles.value); const hfProfiles=parseProfiles(el.hfProfiles.value);
-      state.githubApps=[]; state.hfApps=[]; state.koyebApps=[]; state.expandedItems={}; renderList();
-      const hasKoyeb = !!(el.koyebToken.value.trim() || el.koyebUrls.value.trim());
-      if(!(githubProfiles.length + hfProfiles.length + (hasKoyeb ? 1 : 0))){ setStatus('red', 'Ajoute au moins une source GitHub, Hugging Face ou Koyeb.'); return; }
-      setStatus('orange', 'Scan en cours...'); logDebug('Début du scan.');
-      const githubApps=[]; const hfApps=[]; const koyebApps=[]; const errors=[];
-      for(let i=0;i<githubProfiles.length;i++){
-        const owner=githubProfiles[i]; setStatus('orange', `Scan GitHub ${i+1}/${githubProfiles.length} : ${owner}`);
-        try{ const result=await scanGitHubOwner(owner); githubApps.push(...result.rows); errors.push(...result.errors.map(e => `GitHub repo: ${e}`)); state.githubApps=sortRows(dedupeRows(githubApps)); renderList(); }
-        catch(e){ console.error(e); errors.push(`GitHub profil: ${owner}`); logDebug(`Erreur GitHub ${owner}: ${e.message}`); }
-      }
-      for(let i=0;i<hfProfiles.length;i++){
-        const author=hfProfiles[i]; setStatus('orange', `Scan Hugging Face ${i+1}/${hfProfiles.length} : ${author}`);
-        try{ const rows=await scanHfAuthor(author); hfApps.push(...rows); state.hfApps=sortRows(dedupeRows(hfApps)); renderList(); }
-        catch(e){ console.error(e); errors.push(`Hugging Face: ${author}`); logDebug(`Erreur HF ${author}: ${e.message}`); }
-      }
-      if(hasKoyeb){
-        setStatus('orange', 'Scan Koyeb via proxy...');
-        try{ const rows = await scanKoyeb(); koyebApps.push(...rows); state.koyebApps = sortRows(dedupeRows(koyebApps)); renderList(); if(!rows.length) setStatus('orange', 'Koyeb via proxy : aucune app publique détectée.'); }
-        catch(e){ console.error(e); errors.push('Koyeb'); const msg = String(e.message || 'Erreur inconnue'); if(msg.includes('401')) setStatus('red', 'Koyeb proxy : token invalide ou expiré.'); else if(msg.includes('403')) setStatus('red', 'Koyeb proxy : accès refusé.'); else if(msg.includes('Proxy')) setStatus('red', 'Koyeb : proxy indisponible ou mal configuré.'); else setStatus('red', 'Koyeb : erreur proxy/API.'); logDebug(`Erreur Koyeb: ${msg}`); }
-      }
-      state.githubApps=sortRows(dedupeRows(githubApps)); state.hfApps=sortRows(dedupeRows(hfApps)); state.koyebApps=sortRows(dedupeRows(koyebApps));
-      saveAppData(); saveUi(); renderList();
-      if(state.githubApps.length + state.hfApps.length + state.koyebApps.length) { state.sourcesCollapsed = true; renderSourcesPanel(); saveUi(); }
-      if(errors.length) setStatus('orange', `Scan terminé avec erreurs partielles.`); else setStatus('green', 'Apps synchronisées avec succès.');
-      logDebug({ github: state.githubApps.length, huggingFace: state.hfApps.length, koyeb: state.koyebApps.length, errors });
-    }
-
-    
-    async function refreshVersions(){
-      setStatus('orange', 'Actualisation des versions en cours...');
-      const rows = getAllRows();
-      const promises = rows.map(async (row) => {
-        if(row.source === 'github'){
-          try{
-            const found = await detectLiveAppVersion(row);
-            if(found){
-              row.appVersion = found;
-              logDebug(`✅ ${row.name}: ${found}`);
-            }
-          }catch(e){
-            logDebug(`❌ ${row.name}: ${e.message}`);
-          }
-        }
-      });
-      await Promise.allSettled(promises);
-      saveAppData();
-      renderList();
-      setStatus('green', 'Versions actualisées');
-    }
-
-
-async function detectGitHubPageVersion(owner, repoName, filePath, branch){
-  try{
-    logDebug(`📄 Checking ${owner}/${repoName}/${filePath}`);
-    const contentInfo = await fetchJsonSafe(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/contents/${encodeURIComponent(filePath)}?ref=${encodeURIComponent(branch)}`, { headers: getGitHubHeaders() });
-    if(contentInfo?.content){
-      const text = decodeBase64Unicode(contentInfo.content);
-      const found = extractVersionFromText(filePath, text);
-      logDebug(`✅ Found version ${found} in ${filePath}`);
-      return found;
-    }
-  }catch(e){
-    logDebug(`❌ ${filePath}: ${e.message}`);
-  }
-  return null;
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  return out;
 }
 
-function getAllRows(){ return [...state.githubApps, ...state.hfApps, ...state.koyebApps]; }
-    function getRowByKey(key){ return getAllRows().find(row => rowKey(row) === key) || null; }
-    function countLabel(n){ return `${n} app${n > 1 ? 's' : ''}`; }
-    function statusMeta(row){ if(row.status === true) return 'up'; if(row.status === false) return 'down'; return 'wait'; }
-    function statusDotClass(row){ if(row.status === true) return 'green'; if(row.status === false) return 'red'; return 'orange'; }
-    function detailText(row){ return row.source === 'github' ? (row.pagePath || 'index.html') : (row.sourceInfo || row.ownerLabel || ''); }
+const rtf = new Intl.RelativeTimeFormat('fr', { numeric:'auto' });
+function ago(iso){
+  if (!iso) return '—';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '—';
+  const s = Math.round((t - Date.now()) / 1000), a = Math.abs(s);
+  if (a < 45) return "à l’instant";
+  if (a < 3600) return rtf.format(Math.round(s / 60), 'minute');
+  if (a < 86400) return rtf.format(Math.round(s / 3600), 'hour');
+  if (a < 86400 * 30) return rtf.format(Math.round(s / 86400), 'day');
+  if (a < 86400 * 365) return rtf.format(Math.round(s / (86400 * 30)), 'month');
+  return rtf.format(Math.round(s / (86400 * 365)), 'year');
+}
+const fmtDate = iso => { const d = iso ? new Date(iso) : null; return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('fr-FR') : '—'; };
+const fmtDateTime = iso => { const d = iso ? new Date(iso) : null; return d && !Number.isNaN(d.getTime()) ? d.toLocaleString('fr-FR') : '—'; };
 
-    function normalizeVersionString(value){
-      const raw = String(value || '').trim();
-      if(!raw) return '';
-      const match = raw.match(/v?\d+(?:\.\d+){0,4}(?:[-._a-zA-Z0-9]+)?/);
-      return match ? match[0] : raw.slice(0, 24);
-    }
-    function parseVersionFromJson(data){
-      if(!data || typeof data !== 'object') return '';
-      const candidates = [
-        data.version, data.appVersion, data.app_version,
-        data?.manifest?.version, data?.meta?.version,
-        data?.package?.version
-      ].filter(Boolean);
-      for(const value of candidates){
-        const normalized = normalizeVersionString(value);
-        if(normalized) return normalized;
-      }
-      return '';
-    }
-    function parseVersionFromText(text){
-      const content = String(text || '');
-      if(!content) return '';
-      const patterns = [
-        /"version"\s*:\s*"([^"]+)"/i,
-        /"appVersion"\s*:\s*"([^"]+)"/i,
-        /"app_version"\s*:\s*"([^"]+)"/i,
-        /\bversion\b\s*[:=]\s*["']?([A-Za-z0-9._-]+)/i,
-        /\bapp[-_ ]?version\b\s*[:=]\s*["']?([A-Za-z0-9._-]+)/i,
-        /<meta[^>]+name=["'](?:app-version|version)["'][^>]+content=["']([^"']+)["']/i,
-        /data-app-version=["']([^"']+)["']/i
-      ];
-      for(const rx of patterns){
-        const match = content.match(rx);
-        const normalized = normalizeVersionString(match?.[1] || '');
-        if(normalized) return normalized;
-      }
-      return '';
-    }
-    async function tryFetchVersionCandidate(url){
-      try{
-        const res = await fetch(url, { cache:'no-store' });
-        if(!res.ok) return '';
-        const type = String(res.headers.get('content-type') || '').toLowerCase();
-        if(type.includes('application/json')){
-          const data = await res.json();
-          return parseVersionFromJson(data);
-        }
-        const text = await res.text();
-        if(url.endsWith('.json')){
-          try{ return parseVersionFromJson(JSON.parse(text)); }catch{}
-        }
-        return parseVersionFromText(text);
-      }catch{
-        return '';
-      }
-    }
-    function buildVersionCandidates(link){
-      const out = [];
-      try{
-        const url = new URL(link);
-        const pathname = url.pathname || '/';
-        const base = pathname.endsWith('.html') ? pathname.replace(/[^/]+$/, '') : (pathname.endsWith('/') ? pathname : pathname + '/');
-        const push = (path) => { try{ out.push(new URL(path, url.origin + base).toString()); }catch{} };
-        push('version.txt');
-        push('manifest.json');
-        push('package.json');
-        push('meta.json');
-        out.push(url.toString());
-      }catch{}
-      return [...new Set(out)];
-    }
-    async function detectLiveAppVersion(row){
-      const candidates = buildVersionCandidates(row.link);
-      for(const candidate of candidates){
-        const found = await tryFetchVersionCandidate(candidate);
-        if(found) return found;
-      }
-      return '';
-    }
-    async function refreshVersionForRow(key, announce){
-      const row = getRowByKey(key);
-      if(!row) return;
-      if(announce) setStatus('orange', 'Lecture de version en cours...');
-      const found = await detectLiveAppVersion(row);
-      if(found){
-        row.appVersion = found;
-        saveAppData();
-        renderList();
-        setStatus('green', 'Version app détectée.');
-      }else if(announce){
-        setStatus('orange', 'Version app non détectée, version dépôt conservée.');
-      }
-    }
+/* Icônes */
+const ICONS = {
+  open:'<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  bolt:'<path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/>',
+  star:'<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  chev:'<polyline points="6 9 12 15 18 9"/>',
+  up:'<polyline points="18 15 12 9 6 15"/>',
+  refresh:'<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  search:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  cloud:'<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
+  sun:'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+  moon:'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+  x:'<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  eye:'<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  activity:'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  stop:'<rect x="6" y="6" width="12" height="12" rx="2"/>',
+};
+const ico = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
+const setIcon = (node, name) => { node.innerHTML = ico(name); };
 
-    function renderGroup(title, rows, offset){
-      if(!rows.length) return '';
-      const scanAction = title === 'GitHub Pages' ? 'scan-github' : (title === 'Hugging Face' ? 'scan-hf' : 'scan-koyeb');
-      return `<div class="group-head"><div class="group-label">${escapeHtml(title)}</div><button class="group-rescan" data-action="${scanAction}" title="Rescanner ${escapeHtml(title)}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button></div>` + rows.map((row, idx) => {
-        const key=rowKey(row); const open=isExpanded(key);
-        return `<article class="item-card ${open ? 'open' : ''}" data-card-key="${escapeHtml(key)}">
-          <div class="item-main" data-key="${escapeHtml(key)}">
-            <div class="rank"><span class="dot ${statusDotClass(row)}"></span></div>
-            <div class="item-title-wrap">
-              <div class="item-title">${escapeHtml(row.name)}${row.source === 'github' && row.pagePath ? ' <span style="opacity:.55;font-size:11px;font-weight:400">/ ' + escapeHtml(row.pagePath) + '</span>' : ''}</div>
-              <div class="item-version">${escapeHtml(row.appVersion || row.version || '—')}</div>
-            </div>
-            <button class="action-btn" data-action="open" data-key="${escapeHtml(key)}" title="Ouvrir le lien">${svgOpen}</button>
-          </div>
-          <div class="item-actions">
-            <button class="action-btn" data-action="copy" data-key="${escapeHtml(key)}" title="Copier URL live">${svgCopy}</button>
-            <button class="action-btn" data-action="wake" data-key="${escapeHtml(key)}" title="Wake up">${svgWake}</button>
-            <div class="grow-url">${escapeHtml(row.link)}</div>
-            <div class="item-meta">${escapeHtml(detailText(row))}</div>
-            <div class="item-meta">${escapeHtml(formatDate(row.updatedAt))}</div>
-          </div>
-        </article>`;
-      }).join('');
-    }
+/* ════════════════════════════════════════════════════════════
+   Journal, statut, toast, progression
+   ════════════════════════════════════════════════════════════ */
+const logLines = [];
+function log(msg){
+  const line = `${new Date().toLocaleTimeString('fr-FR')}  ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`;
+  logLines.push(line);
+  if (logLines.length > 400) logLines.shift();
+  const box = $('#logBox');
+  if (box && $('#settingsDlg').open) { box.textContent = logLines.join('\n'); box.scrollTop = box.scrollHeight; }
+}
+function setStatus(kind, text){
+  $('#statusDot').className = 'dot ' + kind;
+  $('#statusText').textContent = text;
+}
+let toastTimer;
+function toast(msg){
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function setProgress(frac){
+  const p = $('#progress');
+  if (frac == null) { p.classList.remove('indet'); p.firstElementChild.style.width = '0'; return; }
+  if (frac === 'indet') { p.classList.add('indet'); p.firstElementChild.style.width = ''; return; }
+  p.classList.remove('indet'); p.firstElementChild.style.width = Math.round(frac * 100) + '%';
+}
+async function copyText(text){
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    try {
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok;
+    } catch { return false; }
+  }
+}
 
-    function renderList(){
-      const gh = state.githubApps; const hf = state.hfApps; const ky = state.koyebApps; const total = gh.length + hf.length + ky.length;
-      el.countLabel.textContent = countLabel(total);
-      el.emptyState.classList.toggle('hidden', total > 0);
-      el.fitWrap.classList.toggle('hidden', total === 0);
-      if(!total){ el.appsList.innerHTML = ''; return; }
-      el.appsList.innerHTML = renderGroup('GitHub Pages', gh, 0) + renderGroup('Hugging Face', hf, gh.length) + renderGroup('Koyeb', ky, gh.length + hf.length);
-    }
+/* ════════════════════════════════════════════════════════════
+   État & persistance
+   ════════════════════════════════════════════════════════════ */
+const blankState = () => ({
+  profiles: { github:[], hf:[], githubToken:'', koyebUrls:'', koyebToken:'', koyebProxy:DEFAULT_PROXY },
+  apps: { github:[], hf:[], koyeb:[] },
+  meta: {},        // key -> { fav, note }  (préservé entre les scans)
+  scanInfo: {},    // source -> ISO du dernier scan complet
+});
+let state = blankState();
+const prefs = { theme:null, filter:'all', status:'all', sort:'recent', group:'source', expanded:{} };
+let query = '';
 
-    async function handleRowAction(action, key){
-      const row=getRowByKey(key); if(!row) return;
-      if(action==='toggle'){ toggleItem(key); return; }
-      if(action==='collapse'){ delete state.expandedItems[key]; saveUi(); renderList(); return; }
-      if(action==='open'){ window.open(row.link, '_blank', 'noopener'); refreshVersionForRow(key, true); return; }
-      if(action==='wake'){
-        setStatus('orange', 'Réveil du serveur en cours...');
-        try{
-          await fetch(row.link, { method:'GET', mode:'no-cors', cache:'no-store' });
-          setStatus('green', 'Tentative de réveil envoyée.');
-        }catch{
-          setStatus('orange', 'Wake up envoyé, réponse non confirmée.');
-        }
-        refreshVersionForRow(key, false);
-        return;
-      }
-      if(action==='copy'){ try{ await navigator.clipboard.writeText(row.link); setStatus('green', 'Lien copié.'); }catch{ setStatus('red', 'Copie impossible sur ce navigateur.'); } }
+function normRow(source, r){
+  if (!isObj(r) || !r.link) return null;
+  let st = r.status;
+  st = st === true ? 'up' : st === false ? 'down' : (STATUS[st] ? st : 'unknown');
+  let v = str(r.appVersion || r.version).trim();
+  if (v === '—' || /^[a-f0-9]{7}$/i.test(v)) v = '';
+  return {
+    key: r.key || `${source}::${r.link}`, source,
+    owner: str(r.owner), ownerLabel: str(r.ownerLabel || r.owner), name: str(r.name || r.link),
+    pagePath: str(r.pagePath), version: v, updatedAt: r.updatedAt || null, link: str(r.link),
+    metaUrl: str(r.metaUrl), sourceInfo: str(r.sourceInfo), status: st, checkedAt: r.checkedAt || null,
+  };
+}
+function fromPayload(p){
+  const s = blankState();
+  if (!isObj(p)) return s;
+  const pr = isObj(p.profiles) ? p.profiles : {};
+  s.profiles.github = arr(pr.githubProfiles).map(str).filter(Boolean);
+  s.profiles.hf = arr(pr.hfProfiles).map(str).filter(Boolean);
+  s.profiles.githubToken = str(pr.githubToken);
+  s.profiles.koyebUrls = str(pr.koyebUrls);
+  s.profiles.koyebToken = str(pr.koyebToken);
+  s.profiles.koyebProxy = str(pr.koyebProxyUrl) || DEFAULT_PROXY;
+  const ad = isObj(p.appData) ? p.appData : {};
+  s.apps.github = arr(ad.githubApps).map(r => normRow('github', r)).filter(Boolean);
+  s.apps.hf     = arr(ad.hfApps).map(r => normRow('hf', r)).filter(Boolean);
+  s.apps.koyeb  = arr(ad.koyebApps).map(r => normRow('koyeb', r)).filter(Boolean);
+  s.meta = isObj(p.meta) ? p.meta : {};
+  s.scanInfo = isObj(p.scanInfo) ? p.scanInfo : {};
+  return s;
+}
+function toPayload(){
+  const meta = {};
+  for (const [k, m] of Object.entries(state.meta)) if (m && (m.fav || m.note)) meta[k] = m;
+  return {
+    v: 3, savedAt: new Date().toISOString(),
+    profiles: {
+      githubProfiles: state.profiles.github, hfProfiles: state.profiles.hf, githubToken: state.profiles.githubToken,
+      koyebUrls: state.profiles.koyebUrls, koyebToken: state.profiles.koyebToken, koyebProxyUrl: state.profiles.koyebProxy,
+    },
+    appData: { githubApps: state.apps.github, hfApps: state.apps.hf, koyebApps: state.apps.koyeb },
+    meta, scanInfo: state.scanInfo,
+  };
+}
+function loadState(){
+  // 1) format v3  2) cache Drive v2  3) clés locales v2
+  const tryParse = k => { try { return JSON.parse(ls.get(k)); } catch { return null; } };
+  let p = tryParse(LS_MAIN);
+  if (!p) p = tryParse(DRIVE_CACHE_KEY);
+  if (!p) {
+    const prof = tryParse(LEGACY.profiles) || {};
+    const data = tryParse(LEGACY.data) || {};
+    const ku = ls.get(LEGACY.koyeb);
+    if (ku) prof.koyebUrls = ku;
+    if (Object.keys(prof).length || Object.keys(data).length) p = { profiles: prof, appData: data };
+  }
+  state = fromPayload(p);
+  try { Object.assign(prefs, tryParse(LS_PREFS) || {}); } catch {}
+  if (!isObj(prefs.expanded)) prefs.expanded = {};
+}
+function saveLocal(){ ls.set(LS_MAIN, JSON.stringify(toPayload())); }
+function persist(){ saveLocal(); drive.scheduleSave(); }
+const persistPrefs = () => ls.set(LS_PREFS, JSON.stringify(prefs));
+
+/* ════════════════════════════════════════════════════════════
+   Données dérivées
+   ════════════════════════════════════════════════════════════ */
+const allRows = () => SRC_KEYS.flatMap(s => state.apps[s]);
+function viewRows(){
+  return allRows().map(r => { const m = state.meta[r.key] || {}; return { ...r, fav: !!m.fav, note: m.note || '' }; });
+}
+function findRow(key){ return allRows().find(r => r.key === key) || null; }
+const dedupe = rows => [...new Map(rows.map(r => [r.key, r])).values()];
+
+function passes(r){
+  const f = prefs.filter;
+  if (f === 'fav' && !r.fav) return false;
+  if (SOURCES[f] && r.source !== f) return false;
+  const st = prefs.status;
+  if (st === 'up' && r.status !== 'up') return false;
+  if (st === 'down' && r.status !== 'down') return false;
+  if (st === 'other' && (r.status === 'up' || r.status === 'down')) return false;
+  if (query) {
+    const hay = fold([r.name, r.pagePath, r.ownerLabel, r.link, r.version, r.note, r.sourceInfo].join(' '));
+    if (!query.split(/\s+/).every(t => hay.includes(t))) return false;
+  }
+  return true;
+}
+const byName = (a, b) => a.name.localeCompare(b.name, 'fr') || a.pagePath.localeCompare(b.pagePath, 'fr');
+const SORTERS = {
+  recent: (a, b) => (new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)) || byName(a, b),
+  name:   byName,
+  status: (a, b) => (STATUS[a.status].rank - STATUS[b.status].rank) || byName(a, b),
+  source: (a, b) => SRC_KEYS.indexOf(a.source) - SRC_KEYS.indexOf(b.source) || byName(a, b),
+};
+
+/* ════════════════════════════════════════════════════════════
+   Rendu
+   ════════════════════════════════════════════════════════════ */
+function cardHtml(r){
+  const st = STATUS[r.status] || STATUS.unknown;
+  const open = !!prefs.expanded[r.key];
+  const path = r.pagePath && r.pagePath !== 'index.html' ? `<span class="path" title="${esc(r.pagePath)}">/ ${esc(r.pagePath)}</span>` : '';
+  const srcLink = r.metaUrl
+    ? `<a href="${esc(safeUrl(r.metaUrl))}" target="_blank" rel="noopener noreferrer">${esc(r.sourceInfo || r.ownerLabel)}</a>`
+    : esc(r.sourceInfo || r.ownerLabel || '—');
+  return `<article class="card${open ? ' open' : ''}" data-key="${esc(r.key)}">
+  <div class="card-head">
+    <span class="dot ${r.status}" title="${st.label}"></span>
+    <div class="titles"><div class="name" title="${esc(r.name)}">${esc(r.name)}</div>${path}</div>
+    <button class="icon-btn sm fav${r.fav ? ' on' : ''}" data-act="fav" aria-pressed="${r.fav}" aria-label="Favori" title="Favori">${ico('star')}</button>
+  </div>
+  <div class="card-meta">
+    <span class="src src-${r.source}" title="${SOURCES[r.source].title}">${SOURCES[r.source].short}</span>
+    ${r.version ? `<span class="tag" title="${esc(r.version)}">${esc(r.version)}</span>` : ''}
+    <span class="muted" title="${esc(fmtDate(r.updatedAt))}">${esc(ago(r.updatedAt))}</span>
+  </div>
+  <div class="card-actions">
+    <a class="btn primary sm" href="${esc(safeUrl(r.link))}" target="_blank" rel="noopener noreferrer">${ico('open')}Ouvrir</a>
+    <button class="icon-btn sm" data-act="copy" title="Copier l’URL" aria-label="Copier l’URL">${ico('copy')}</button>
+    <button class="icon-btn sm" data-act="wake" title="Réveiller" aria-label="Réveiller">${ico('bolt')}</button>
+    <button class="icon-btn sm chev" data-act="toggle" title="Détails" aria-label="Détails" aria-expanded="${open}">${ico('chev')}</button>
+  </div>
+  <div class="details">
+    <div class="kv"><span>URL</span><code>${esc(r.link)}</code></div>
+    <div class="kv"><span>Source</span><span>${srcLink}</span></div>
+    <div class="kv"><span>Statut</span><span>${st.label}${r.checkedAt ? ` · vérifié ${esc(ago(r.checkedAt))}` : ''}</span></div>
+    <div class="kv"><span>Mise à jour</span><span>${esc(fmtDate(r.updatedAt))}</span></div>
+    <textarea class="note" placeholder="Note personnelle…" aria-label="Note">${esc(r.note)}</textarea>
+    <div><button class="sm" data-act="recheck">${ico('refresh')}Revérifier</button></div>
+  </div>
+</article>`;
+}
+function groupHtml(title, rows, src){
+  const btn = src ? `<button class="icon-btn" data-act="scan-source" data-src="${src}" title="Rescanner ${esc(title)}" aria-label="Rescanner ${esc(title)}">${ico('refresh')}</button>` : '';
+  return `<section class="group"><div class="group-head"><h2>${esc(title)}</h2><span class="n">${rows.length}</span>${btn}</div><div class="grid">${rows.map(cardHtml).join('')}</div></section>`;
+}
+
+let renderQueued = false;
+function renderSoon(){ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; render(); }); }
+
+function render(){
+  const rows = viewRows();
+  renderTiles(rows);
+  renderChips(rows);
+  const vis = rows.filter(passes).sort(SORTERS[prefs.sort] || SORTERS.recent);
+  const list = $('#list'), empty = $('#empty');
+
+  if (!vis.length) {
+    list.innerHTML = '';
+    empty.classList.remove('hidden');
+    if (!rows.length) {
+      const configured = SRC_KEYS.some(isConfigured);
+      empty.innerHTML = configured
+        ? `<h2>Aucune application chargée</h2><p>Lance un scan pour récupérer tes apps.</p><button class="primary" data-empty="scan">Scanner</button>`
+        : `<h2>Bienvenue 👋</h2><p>Ajoute au moins un profil GitHub, Hugging Face ou Koyeb pour commencer.</p><button class="primary" data-empty="settings">Configurer les sources</button>`;
+    } else {
+      empty.innerHTML = `<h2>Aucun résultat</h2><p>Aucune app ne correspond aux filtres actuels.</p><button data-empty="reset">Réinitialiser les filtres</button>`;
     }
-    function updateDriveBadge() {
-      const badge = document.getElementById('driveBadge');
-      if (!badge) return;
-      if (driveAccessToken) {
-        badge.style.background = 'rgba(56,211,159,.15)';
-        badge.style.borderColor = 'rgba(56,211,159,.3)';
-        badge.style.color = 'var(--ok)';
-        badge.textContent = '☁ ✓ Drive';
-      } else {
-        badge.style.background = '';
-        badge.style.borderColor = '';
-        badge.style.color = '';
-        badge.textContent = '☁ Drive';
-      }
+    return;
+  }
+  empty.classList.add('hidden');
+
+  if (prefs.group === 'source') {
+    let html = '';
+    let rest = vis;
+    if (prefs.filter !== 'fav') {
+      const favs = vis.filter(r => r.fav);
+      if (favs.length) { html += groupHtml('★ Favoris', favs, null); rest = vis.filter(r => !r.fav); }
     }
-    function handleDriveBadgeClick() {
-      if (driveAccessToken) {
-        if (!confirm('Déconnecter Google Drive ?')) return;
-        google.accounts.oauth2.revoke(driveAccessToken);
-        driveAccessToken = null; driveFileId = null;
-        ['connected','hint','file_id','last_sync','last_sync_iso','token','token_exp'].forEach(k => {
-          localStorage.removeItem(DRIVE_LS+k); sessionStorage.removeItem(DRIVE_LS+k);
-          _deleteCookie(DRIVE_LS+k);
+    for (const s of SRC_KEYS) {
+      const g = rest.filter(r => r.source === s);
+      if (g.length) html += groupHtml(SOURCES[s].title, g, s);
+    }
+    list.innerHTML = html;
+  } else {
+    list.innerHTML = `<section class="group"><div class="grid">${vis.map(cardHtml).join('')}</div></section>`;
+  }
+}
+function renderTiles(rows){
+  const c = { up:0, down:0, other:0 };
+  rows.forEach(r => { if (r.status === 'up') c.up++; else if (r.status === 'down') c.down++; else c.other++; });
+  const tile = (id, label, n, cls) => `<button class="tile ${cls}${prefs.status === id ? ' active' : ''}" data-status="${id}"><b>${n}</b><span>${label}</span></button>`;
+  $('#tiles').innerHTML = tile('all', 'Applications', rows.length, 'all') + tile('up', 'En ligne', c.up, 'up') + tile('down', 'Hors ligne', c.down, 'down') + tile('other', 'Veille / autres', c.other, 'other');
+  const last = SRC_KEYS.map(s => state.scanInfo[s]).filter(Boolean).sort().pop();
+  const lastCheck = rows.map(r => r.checkedAt).filter(Boolean).sort().pop();
+  const parts = [];
+  if (last) parts.push(`Dernier scan : ${ago(last)}`);
+  if (lastCheck) parts.push(`dernière vérification : ${ago(lastCheck)}`);
+  $('#scanInfo').textContent = parts.join(' · ');
+}
+function renderChips(rows){
+  const n = f => f === 'all' ? rows.length : f === 'fav' ? rows.filter(r => r.fav).length : rows.filter(r => r.source === f).length;
+  const defs = [['all', 'Toutes'], ['fav', '★ Favoris'], ...SRC_KEYS.map(s => [s, SOURCES[s].title])];
+  $('#chips').innerHTML = defs.map(([id, label]) =>
+    `<button class="chip${prefs.filter === id ? ' active' : ''}" data-filter="${id}" aria-pressed="${prefs.filter === id}">${label} <span class="n">${n(id)}</span></button>`).join('');
+}
+
+/* ════════════════════════════════════════════════════════════
+   Détection de version
+   ════════════════════════════════════════════════════════════ */
+const cleanVersion = v => str(v).trim().slice(0, 28);
+function parseVersion(text){
+  const t = str(text);
+  const pats = [
+    /\b(?:const|let|var)\s+APP_VERSION\s*=\s*['"`]([^'"`]+)['"`]/,
+    /<meta[^>]+name=["'](?:app-version|version)["'][^>]+content=["']([^"']+)["']/i,
+    /data-app-version=["']([^"']+)["']/i,
+    /<title>[^<]*?\b(v?\d+\.\d+(?:\.\d+)*)[^<]*<\/title>/i,
+  ];
+  for (const rx of pats) { const m = t.match(rx); if (m && m[1]) return cleanVersion(m[1]); }
+  return '';
+}
+async function fetchVersionFrom(url){
+  try {
+    const res = await fetchT(url, { cache:'no-store' }, 6000);
+    if (!res.ok) return '';
+    const text = await res.text();
+    const trimmed = text.trim();
+    if (trimmed.startsWith('{')) {
+      try { const j = JSON.parse(trimmed); const v = j.version || j.appVersion || j.app_version || j.manifest?.version; return v ? cleanVersion(v) : ''; } catch {}
+    }
+    if (/version\.txt$/i.test(url)) { const first = trimmed.split(/\r?\n/)[0]; return /^v?\d/.test(first) ? cleanVersion(first) : ''; }
+    return parseVersion(text);
+  } catch { return ''; }
+}
+/** Pour HF / Koyeb : essaie la page puis quelques fichiers classiques (si CORS le permet). */
+async function detectLiveVersion(link){
+  let base;
+  try { const u = new URL(link); base = u.origin + (u.pathname.endsWith('/') ? u.pathname : u.pathname.replace(/[^/]+$/, '')); } catch { return ''; }
+  const found = await Promise.all([link, base + 'version.txt', base + 'manifest.json', base + 'package.json'].map(fetchVersionFrom));
+  return found.find(Boolean) || '';
+}
+/** Pour GitHub Pages : une seule requête CORS donne statut réel + version. */
+async function probePage(url){
+  try {
+    const res = await fetchT(url, { cache:'no-store' }, 9000);
+    if (!res.ok) return { status:'down', version:'' };
+    return { status:'up', version: parseVersion(await res.text()) };
+  } catch {
+    return { status: (await ping(url)) ? 'up' : 'down', version:'' };
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   GitHub
+   ════════════════════════════════════════════════════════════ */
+class RateLimitError extends Error {
+  constructor(resetMs){ super('Quota GitHub atteint'); this.resetAt = resetMs; }
+}
+const gh = {
+  headers(){ const h = { Accept:'application/vnd.github+json' }; if (state.profiles.githubToken.trim()) h.Authorization = 'Bearer ' + state.profiles.githubToken.trim(); return h; },
+  async api(path){
+    const res = await fetchT('https://api.github.com' + path, { headers: this.headers() }, 15000);
+    if (res.status === 429 || (res.status === 403 && res.headers.get('x-ratelimit-remaining') === '0')) {
+      throw new RateLimitError(Number(res.headers.get('x-ratelimit-reset')) * 1000 || 0);
+    }
+    if (!res.ok) { const e = new Error(`GitHub ${res.status} ${path}`); e.status = res.status; throw e; }
+    return res.json();
+  },
+};
+const normPath = v => { const s = str(v).trim(); return s === '/' ? '' : s.replace(/^\/+|\/+$/g, ''); };
+const isSpecialRepo = (owner, name) => name.toLowerCase() === owner.toLowerCase() + '.github.io';
+function isPagesCandidate(owner, repo){
+  if (repo.fork || repo.private || repo.archived || repo.disabled) return false;
+  return isSpecialRepo(owner, repo.name) || !!repo.has_pages || /github\.io/i.test(repo.homepage || '');
+}
+async function ghListRepos(owner){
+  const all = [];
+  for (let page = 1; page <= 5; page++) {
+    const rows = await gh.api(`/users/${enc(owner)}/repos?per_page=100&page=${page}&sort=pushed&direction=desc`);
+    all.push(...rows);
+    if (rows.length < 100) break;
+  }
+  return all;
+}
+async function ghPagesInfo(owner, repo){
+  let info = null;
+  if (state.profiles.githubToken.trim()) { // /pages exige un accès authentifié ; sans token on économise la requête
+    try { info = await gh.api(`/repos/${enc(owner)}/${enc(repo.name)}/pages`); } catch (e) { if (e instanceof RateLimitError) throw e; }
+  }
+  const fallback = /^https?:\/\//i.test(repo.homepage || '') ? repo.homepage
+    : (isSpecialRepo(owner, repo.name) ? `https://${owner}.github.io/` : `https://${owner}.github.io/${repo.name}/`);
+  return {
+    baseUrl: str(info?.html_url || fallback).replace(/\/+$/, '') + '/',
+    branch: info?.source?.branch || repo.default_branch || 'main',
+    path: normPath(info?.source?.path),
+  };
+}
+/** Un seul appel (git trees récursif) au lieu d'un appel par dossier. */
+async function ghHtmlFiles(owner, repo, branch, srcPath){
+  const data = await gh.api(`/repos/${enc(owner)}/${enc(repo)}/git/trees/${enc(branch)}?recursive=1`);
+  if (data.truncated) log(`${owner}/${repo} : arborescence tronquée par GitHub`);
+  const prefix = srcPath ? srcPath + '/' : '';
+  return arr(data.tree)
+    .filter(n => n.type === 'blob' && /\.html?$/i.test(n.path) && n.path.startsWith(prefix)
+      && !/(^|\/)(node_modules|\.git|vendor)\//.test(n.path) && !/(^|\/)404\.html?$/i.test(n.path))
+    .map(n => n.path.slice(prefix.length))
+    .sort((a, b) => a.localeCompare(b, 'fr'));
+}
+function pageUrl(base, rel){
+  const r = str(rel).replace(/^\/+/, '');
+  if (!r || /^index\.html?$/i.test(r)) return base;
+  const e = r.split('/').map(enc).join('/');
+  return /\/index\.html?$/i.test(r) ? base + e.replace(/index\.html?$/i, '') : base + e;
+}
+
+async function scanGithub(ctx){
+  const owners = state.profiles.github, prev = state.apps.github;
+  const out = [], errors = [];
+  let limited = null;
+  for (const owner of owners) {
+    const prevOwner = prev.filter(r => r.owner === owner);
+    if (ctx.cancelled() || limited) { out.push(...prevOwner); continue; }
+    ctx.status(`GitHub · ${owner}`);
+    try {
+      const repos = (await ghListRepos(owner)).filter(r => isPagesCandidate(owner, r));
+      log(`GitHub ${owner} : ${repos.length} dépôt(s) avec Pages`);
+      const targets = [];
+      // phase 1 : lister les pages de chaque dépôt (3 en parallèle)
+      let done = 0;
+      await pool(repos, 3, async repo => {
+        const fullName = `${owner}/${repo.name}`;
+        try {
+          const info = await ghPagesInfo(owner, repo);
+          const files = await ghHtmlFiles(owner, repo.name, info.branch, info.path);
+          for (const rel of (files.length ? files : [''])) targets.push({ repo, rel, link: pageUrl(info.baseUrl, rel) });
+        } catch (e) {
+          if (e instanceof RateLimitError) { limited = e; return; }
+          log(`${fullName} : ${e.message}`); errors.push(fullName);
+          const kept = prev.filter(r => r.sourceInfo === fullName);
+          if (kept.length) kept.forEach(r => targets.push({ repo, rel: r.pagePath === 'index.html' ? '' : r.pagePath, link: r.link, stale: true }));
+          else { const link = isSpecialRepo(owner, repo.name) ? `https://${owner}.github.io/` : `https://${owner}.github.io/${repo.name}/`; targets.push({ repo, rel:'', link }); }
+        } finally { ctx.progress(0.5 * (++done / repos.length)); }
+      }, () => ctx.cancelled() || limited);
+      if (limited) { out.push(...prevOwner); continue; }
+      // phase 2 : sonder chaque page (8 en parallèle)
+      const prevByKey = new Map(prev.map(r => [r.key, r]));
+      let probed = 0;
+      const res = await pool(targets, 8, async t => {
+        const p = await probePage(t.link);
+        ctx.progress(0.5 + 0.5 * (++probed / targets.length));
+        return p;
+      }, ctx.cancelled);
+      targets.forEach((t, i) => {
+        const key = `github::${t.link}`, old = prevByKey.get(key), p = res[i];
+        if (!p || p.error) { if (old) out.push(old); return; }
+        out.push({
+          key, source:'github', owner, ownerLabel:`${owner} · ${t.repo.name}`, name:t.repo.name,
+          pagePath: t.rel || 'index.html', version: p.version || old?.version || '',
+          updatedAt: t.repo.pushed_at || t.repo.updated_at || null, link: t.link, metaUrl: t.repo.html_url,
+          sourceInfo: `${owner}/${t.repo.name}`, status: p.status, checkedAt: new Date().toISOString(),
         });
-        localStorage.removeItem(DRIVE_CACHE_KEY);
-        driveStopPolling();
-        updateDriveBadge();
-        driveShowLogin(true);
-      } else {
-        driveSignIn();
-      }
+      });
+    } catch (e) {
+      out.push(...prevOwner);
+      if (e instanceof RateLimitError) limited = e;
+      else { errors.push(owner); log(`GitHub ${owner} : ${e.message}`); }
     }
-  </script>
+  }
+  return { rows: out, errors, limited, complete: !limited && !ctx.cancelled() };
+}
+
+/* ════════════════════════════════════════════════════════════
+   Hugging Face
+   ════════════════════════════════════════════════════════════ */
+function hfStatus(info){
+  const stage = str(info?.runtime?.stage || info?.stage).toUpperCase();
+  if (!stage) return null;
+  if (stage === 'RUNNING') return 'up';
+  if (['BUILDING','STARTING','PREPARING','RUNNING_BUILDING','APP_STARTING','UPDATING'].includes(stage)) return 'wait';
+  if (['PAUSED','SLEEPING','SLEEP'].includes(stage)) return 'sleep';
+  if (['STOPPED','FAILED','ERROR','RUNTIME_ERROR','BUILD_ERROR','CONFIG_ERROR','NO_APP_FILE','DELETING'].includes(stage)) return 'down';
+  return null;
+}
+const hfApiUrl = id => { const [a, ...r] = id.split('/'); return `https://huggingface.co/api/spaces/${enc(a)}/${enc(r.join('/'))}`; };
+const hfRepoUrl = id => { const [a, ...r] = id.split('/'); return `https://huggingface.co/spaces/${enc(a)}/${enc(r.join('/'))}`; };
+function hfPublicUrl(id, info, listed){
+  const [author, ...rest] = id.split('/'), name = rest.join('/');
+  const dom = info?.customDomain || info?.custom_domain || listed?.customDomain || listed?.custom_domain || info?.domain || listed?.domain;
+  if (dom) return /^https?:\/\//i.test(dom) ? dom : `https://${dom}`;
+  const host = info?.host || info?.spaceHost || info?.runtime?.host || listed?.host || listed?.spaceHost;
+  if (host) return /^https?:\/\//i.test(host) ? host : `https://${host}`;
+  const sub = `${author}-${name}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return `https://${sub}.hf.space`;
+}
+function normalizeHf(space, fallbackAuthor){
+  const raw = str(space?.id).trim();
+  if (raw.includes('/')) return raw;
+  const a = str(space?.author || fallbackAuthor).trim(), n = str(space?.name || raw).trim();
+  return a && n ? `${a}/${n}` : '';
+}
+async function hfLatestCommit(id){
+  const data = await jget(hfApiUrl(id) + '/commits/main');
+  const title = str(data?.[0]?.title || data?.[0]?.message).split('\n')[0].trim();
+  return title && !/^[a-f0-9]{7,40}$/i.test(title) ? title : '';
+}
+async function scanHf(ctx){
+  const prev = state.apps.hf, out = [], errors = [];
+  const authors = state.profiles.hf;
+  for (const [ai, author] of authors.entries()) {
+    const prevAuthor = prev.filter(r => r.owner === author);
+    if (ctx.cancelled()) { out.push(...prevAuthor); continue; }
+    ctx.status(`Hugging Face · ${author}`);
+    try {
+      const base = `https://huggingface.co/api/spaces?author=${enc(author)}&limit=100`;
+      const list = (await jget(base + '&full=true')) ?? (await jget(base));
+      if (!Array.isArray(list)) throw new Error('API Hugging Face injoignable');
+      log(`HF ${author} : ${list.length} space(s)`);
+      let done = 0;
+      const res = await pool(list, 4, async space => {
+        const id = normalizeHf(space, author);
+        if (!id) return null;
+        const old = prev.find(r => r.sourceInfo === id);
+        const info = await jget(hfApiUrl(id));
+        const link = hfPublicUrl(id, info, space);
+        let status = hfStatus(info);
+        if (!status) status = (await ping(link)) ? 'up' : 'down';
+        let version = status === 'up' ? await detectLiveVersion(link) : '';
+        if (!version) version = cleanVersion(info?.cardData?.version);
+        if (!version) version = cleanVersion(await hfLatestCommit(id));
+        ctx.progress(++done / list.length);
+        return {
+          key: `hf::${link}`, source:'hf', owner: id.split('/')[0], ownerLabel: id.split('/')[0], name: id.split('/').slice(1).join('/'),
+          pagePath:'', version: version || old?.version || '', updatedAt: info?.lastModified || space?.lastModified || null,
+          link, metaUrl: hfRepoUrl(id), sourceInfo: id, status, checkedAt: new Date().toISOString(),
+        };
+      }, ctx.cancelled);
+      res.forEach(r => { if (r && !r.error) out.push(r); });
+      res.filter(r => r?.error).forEach(r => log('HF : ' + r.error.message));
+    } catch (e) {
+      out.push(...prevAuthor); errors.push(author); log(`HF ${author} : ${e.message}`);
+    }
+  }
+  return { rows: out, errors, complete: !ctx.cancelled() && !errors.length };
+}
+
+/* ════════════════════════════════════════════════════════════
+   Koyeb
+   ════════════════════════════════════════════════════════════ */
+function koyebStatus(v){
+  v = str(v).toLowerCase();
+  if (['healthy','running'].includes(v)) return 'up';
+  if (['starting','resuming','deploying','provisioning','degraded'].includes(v)) return 'wait';
+  if (['paused','pausing'].includes(v)) return 'sleep';
+  if (['unhealthy','error','failed','stopped','deleting'].includes(v)) return 'down';
+  return null;
+}
+async function koyebListApps(){
+  const token = state.profiles.koyebToken.trim(), proxy = state.profiles.koyebProxy.trim();
+  if (!token) throw new Error('Token Koyeb manquant');
+  if (!proxy) throw new Error('Proxy Koyeb manquant');
+  const res = await fetchT(proxy, { method:'POST', headers:{ 'Content-Type':'application/json', Accept:'application/json' }, body: JSON.stringify({ provider:'koyeb', token }) }, 15000);
+  if (!res.ok) throw new Error(`Proxy HTTP ${res.status} ${(await res.text().catch(() => '')).slice(0, 160)}`);
+  const d = await res.json();
+  for (const c of [d?.apps, d?.items, d, d?.data]) if (Array.isArray(c)) return c;
+  throw new Error('Réponse proxy Koyeb inattendue');
+}
+function normKoyebUrl(raw){
+  let s = str(raw).trim(); if (!s) return null;
+  if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+  try { const u = new URL(s); return /koyeb\.app$/i.test(u.hostname) ? u : null; } catch { return null; }
+}
+async function scanKoyeb(ctx){
+  const prev = state.apps.koyeb, rows = [], errors = [];
+  const now = () => new Date().toISOString();
+  if (state.profiles.koyebToken.trim()) {
+    ctx.status('Koyeb · API');
+    try {
+      const apps = await koyebListApps();
+      await pool(apps, 6, async app => {
+        const dom = arr(app?.domains).find(d => d?.name);
+        if (!dom) return;
+        const link = `https://${dom.name}/`;
+        const status = koyebStatus(app?.status) || ((await ping(link)) ? 'up' : 'down');
+        rows.push({
+          key: `koyeb::${link}`, source:'koyeb', owner:'koyeb', ownerLabel:'Koyeb', name: str(app?.name || dom.name),
+          pagePath:'', version: cleanVersion(app?.appVersion || app?.version) || prev.find(r => r.link === link)?.version || '',
+          updatedAt: app?.updated_at || app?.updatedAt || app?.created_at || null, link, metaUrl:'',
+          sourceInfo: str(app?.id || 'koyeb-app'), status, checkedAt: now(),
+        });
+      }, ctx.cancelled);
+    } catch (e) {
+      errors.push('Koyeb API'); log('Koyeb API : ' + e.message);
+      const m = e.message;
+      ctx.warn(/401/.test(m) ? 'Koyeb : token invalide ou expiré' : /403/.test(m) ? 'Koyeb : accès refusé' : 'Koyeb : proxy indisponible ou mal configuré');
+      rows.push(...prev.filter(r => r.sourceInfo && !/^https?:/.test(r.sourceInfo)));   // on garde les anciennes lignes API
+    }
+  }
+  const urls = state.profiles.koyebUrls.split(/[\r\n,;]+/).map(normKoyebUrl).filter(Boolean);
+  await pool(urls, 6, async u => {
+    const link = u.href;
+    if (rows.some(r => r.link === link)) return;
+    rows.push({
+      key: `koyeb::${link}`, source:'koyeb', owner:'koyeb', ownerLabel:'Koyeb', name: u.hostname.replace(/\.koyeb\.app$/i, ''),
+      pagePath:'', version: prev.find(r => r.link === link)?.version || '', updatedAt:null, link, metaUrl:'', sourceInfo: link,
+      status: (await ping(link)) ? 'up' : 'down', checkedAt: now(),
+    });
+  }, ctx.cancelled);
+  return { rows, errors, complete: !ctx.cancelled() && !errors.length };
+}
+
+/* ════════════════════════════════════════════════════════════
+   Scan / vérification
+   ════════════════════════════════════════════════════════════ */
+const SCANNERS = { github: scanGithub, hf: scanHf, koyeb: scanKoyeb };
+function isConfigured(s){
+  const p = state.profiles;
+  return s === 'github' ? p.github.length > 0 : s === 'hf' ? p.hf.length > 0 : !!(p.koyebToken.trim() || p.koyebUrls.trim());
+}
+const job = { running:false, cancel:false };
+function setBusy(on, label){
+  job.running = on;
+  $('#scanLbl').textContent = on ? 'Annuler' : 'Scanner';
+  setIcon($('#scanBtn .ic'), on ? 'stop' : 'refresh');
+  $('#checkBtn').disabled = on;
+  $$('[data-act="scan-source"], [data-act="recheck"], [data-act="wake"]').forEach(b => b.disabled = on);
+  setProgress(on ? 'indet' : null);
+}
+const sortAndDedupe = rows => dedupe(rows).sort(SORTERS.recent);
+
+async function runScan(only){
+  if (job.running) { job.cancel = true; setStatus('wait', 'Annulation…'); return; }
+  const wanted = (only ? [only] : SRC_KEYS).filter(isConfigured);
+  if (!wanted.length) { toast('Configure d’abord une source'); openSettings(); return; }
+  setBusy(true); job.cancel = false;
+  const warnings = []; let limited = null;
+  const ctx = {
+    cancelled: () => job.cancel,
+    status: t => setStatus('wait', t),
+    progress: f => setProgress(f),
+    warn: m => warnings.push(m),
+  };
+  log(`Scan : ${wanted.join(', ')}`);
+  try {
+    for (const s of wanted) {
+      if (job.cancel) break;
+      setProgress('indet');
+      const r = await SCANNERS[s](ctx);
+      state.apps[s] = sortAndDedupe(r.rows);
+      if (r.complete) state.scanInfo[s] = new Date().toISOString();
+      if (r.errors.length) warnings.push(`${SOURCES[s].title} : ${r.errors.length} erreur(s)`);
+      if (r.limited) limited = r.limited;
+      saveLocal(); renderSoon();
+    }
+    // Les clés de méta orphelines ne sont conservées que si au moins un scan complet a eu lieu : on garde tout, c'est léger.
+    persist(); render();
+    if (limited) {
+      const when = limited.resetAt ? new Date(limited.resetAt).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }) : 'plus tard';
+      setStatus('ko', `Quota GitHub atteint — réessaie vers ${when}${state.profiles.githubToken ? '' : ' ou ajoute un token'}`);
+    } else if (job.cancel) setStatus('wait', 'Scan annulé (données précédentes conservées).');
+    else if (warnings.length) setStatus('wait', 'Scan terminé : ' + warnings.join(' · '));
+    else setStatus('ok', `${allRows().length} app(s) synchronisée(s).`);
+    log({ github: state.apps.github.length, hf: state.apps.hf.length, koyeb: state.apps.koyeb.length, warnings });
+  } catch (e) {
+    console.error(e); log('Erreur scan : ' + e.message); setStatus('ko', 'Erreur pendant le scan.');
+  } finally { setBusy(false); job.cancel = false; render(); }
+}
+
+async function refreshRow(row){
+  const patch = { checkedAt: new Date().toISOString() };
+  if (row.source === 'github') {
+    const p = await probePage(row.link);
+    patch.status = p.status;
+    if (p.version) patch.version = p.version;
+  } else if (row.source === 'hf') {
+    const info = await jget(hfApiUrl(row.sourceInfo));
+    let st = hfStatus(info);
+    if (!st) st = (await ping(row.link)) ? 'up' : 'down';
+    patch.status = st;
+    if (info?.lastModified) patch.updatedAt = info.lastModified;
+    if (st === 'up') { const v = await detectLiveVersion(row.link); if (v) patch.version = v; }
+  } else {
+    const ok = await ping(row.link);
+    patch.status = !ok ? 'down' : (row.status === 'sleep' ? 'sleep' : 'up');
+    if (ok) { const v = await detectLiveVersion(row.link); if (v) patch.version = v; }
+  }
+  Object.assign(row, patch);
+  return row;
+}
+async function checkAll(){
+  if (job.running) return;
+  const rows = allRows();
+  if (!rows.length) { toast('Rien à vérifier'); return; }
+  setBusy(true);
+  let done = 0;
+  setStatus('wait', `Vérification 0/${rows.length}…`); setProgress(0);
+  await pool(rows, 8, async r => {
+    await refreshRow(r);
+    setStatus('wait', `Vérification ${++done}/${rows.length}…`); setProgress(done / rows.length);
+  }, () => job.cancel);
+  saveLocal(); drive.scheduleSave();
+  setBusy(false); job.cancel = false; render();
+  const down = rows.filter(r => r.status === 'down').length;
+  setStatus(down ? 'wait' : 'ok', down ? `${down} app(s) hors ligne.` : 'Tout est en ligne.');
+}
+
+/* ════════════════════════════════════════════════════════════
+   Actions sur les cartes
+   ════════════════════════════════════════════════════════════ */
+async function wake(row){
+  setStatus('wait', `Réveil de ${row.name}…`);
+  await ping(row.link);
+  for (const delay of [4000, 10000]) {
+    await sleep(delay);
+    await refreshRow(row);
+    renderSoon();
+    if (row.status === 'up') break;
+  }
+  saveLocal();
+  setStatus(row.status === 'up' ? 'ok' : 'wait', row.status === 'up' ? `${row.name} répond.` : `${row.name} : réveil envoyé, pas encore de réponse.`);
+}
+async function onListClick(e){
+  const emptyBtn = e.target.closest('[data-empty]');
+  if (emptyBtn) {
+    const a = emptyBtn.dataset.empty;
+    if (a === 'scan') runScan(); else if (a === 'settings') openSettings();
+    else { prefs.filter = 'all'; prefs.status = 'all'; query = ''; $('#search').value = ''; persistPrefs(); render(); }
+    return;
+  }
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const act = btn.dataset.act;
+  if (act === 'scan-source') return job.running ? toast('Un scan est déjà en cours') : void runScan(btn.dataset.src);
+  const card = btn.closest('[data-key]');
+  const row = card && findRow(card.dataset.key);
+  if (!row) return;
+  const key = row.key;
+  if (act === 'toggle') {
+    const open = card.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open);
+    if (open) prefs.expanded[key] = 1; else delete prefs.expanded[key];
+    persistPrefs();
+  } else if (act === 'fav') {
+    const m = state.meta[key] = state.meta[key] || {};
+    m.fav = !m.fav; persist(); render();
+  } else if (act === 'copy') {
+    toast(await copyText(row.link) ? 'URL copiée' : 'Copie impossible');
+  } else if (act === 'wake') {
+    btn.disabled = true; await wake(row); btn.disabled = false;
+  } else if (act === 'recheck') {
+    btn.disabled = true; setStatus('wait', `Vérification de ${row.name}…`);
+    await refreshRow(row); persist(); render(); setStatus('ok', `${row.name} : ${STATUS[row.status].label.toLowerCase()}.`);
+  }
+}
+const saveNote = debounce((key, text) => {
+  const m = state.meta[key] = state.meta[key] || {};
+  m.note = text.trim(); persist();
+}, 500);
+
+/* ════════════════════════════════════════════════════════════
+   Paramètres
+   ════════════════════════════════════════════════════════════ */
+function hydrateForm(){
+  const p = state.profiles;
+  $('#ghProfiles').value = p.github.join('\n');
+  $('#hfProfiles').value = p.hf.join('\n');
+  $('#ghToken').value = p.githubToken;
+  $('#koUrls').value = p.koyebUrls;
+  $('#koToken').value = p.koyebToken;
+  $('#koProxy').value = p.koyebProxy;
+}
+function readForm(){
+  const p = state.profiles;
+  p.github = parseList($('#ghProfiles').value);
+  p.hf = parseList($('#hfProfiles').value);
+  p.githubToken = $('#ghToken').value.trim();
+  p.koyebUrls = $('#koUrls').value;
+  p.koyebToken = $('#koToken').value.trim();
+  p.koyebProxy = $('#koProxy').value.trim() || DEFAULT_PROXY;
+  persist(); renderSoon();
+}
+function openSettings(focusLog){
+  hydrateForm();
+  $('#logBox').textContent = logLines.length ? logLines.join('\n') : '—';
+  const dlg = $('#settingsDlg');
+  if (!dlg.open) dlg.showModal();
+  if (focusLog) $('#logSec').scrollIntoView({ block:'end' });
+}
+function exportData(){
+  const p = toPayload();
+  p.profiles.githubToken = ''; p.profiles.koyebToken = '';
+  const blob = new Blob([JSON.stringify(p, null, 2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `centraliseur_apps_${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+async function importData(file){
+  try {
+    const incoming = fromPayload(JSON.parse(await file.text()));
+    const keepGh = state.profiles.githubToken, keepKo = state.profiles.koyebToken;
+    state = incoming;
+    if (!state.profiles.githubToken) state.profiles.githubToken = keepGh;
+    if (!state.profiles.koyebToken) state.profiles.koyebToken = keepKo;
+    persist(); hydrateForm(); render(); toast('Import terminé');
+  } catch (e) { toast('Fichier invalide'); log('Import : ' + e.message); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   Google Drive
+   ════════════════════════════════════════════════════════════ */
+const drive = {
+  token:null, exp:0, fileId:null, client:null, gis:null, pending:null, tokenPromise:null,
+  ready:false,        // la première synchro est terminée : on peut écrire sans écraser Drive
+  dirty: ls.get(DRIVE_LS + 'dirty') === '1',
+  saving:false, again:false, timer:null, poll:null, remote:null,
+
+  isConnected(){ return !!this.token; },
+  setDirty(v){ this.dirty = v; ls.set(DRIVE_LS + 'dirty', v ? '1' : '0'); },
+  ui(stateName){
+    const b = $('#driveBtn');
+    b.classList.toggle('on', stateName === 'on');
+    b.classList.toggle('err', stateName === 'err');
+    $('.lbl', b).textContent = stateName === 'on' ? 'Drive ✓' : stateName === 'busy' ? 'Drive…' : 'Drive';
+    b.title = stateName === 'on' ? 'Google Drive connecté — cliquer pour se déconnecter' : 'Se connecter à Google Drive';
+  },
+
+  loadGis(){
+    if (this.gis) return this.gis;
+    this.gis = new Promise((res, rej) => {
+      if (window.google?.accounts?.oauth2) return res();
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+      s.onload = () => res(); s.onerror = () => { this.gis = null; rej(new Error('Impossible de charger Google Identity Services')); };
+      document.head.appendChild(s);
+    });
+    return this.gis;
+  },
+  async initClient(){
+    await this.loadGis();
+    if (this.client) return;
+    this.client = google.accounts.oauth2.initTokenClient({
+      client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPE,
+      login_hint: cookie.get(DRIVE_LS + 'hint') || ls.get(DRIVE_LS + 'hint') || '',
+      callback: resp => {
+        if (resp.error) return this.pending?.reject(new Error(resp.error));
+        this.storeToken(resp);
+        this.pending?.resolve();
+      },
+      error_callback: err => this.pending?.reject(new Error(err?.type || 'oauth_error')),
+    });
+  },
+  storeToken(resp){
+    this.token = resp.access_token;
+    this.exp = Date.now() + (resp.expires_in || 3599) * 1000 - 60000;
+    ls.set(DRIVE_LS + 'token', this.token); ls.set(DRIVE_LS + 'token_exp', String(this.exp));
+    ls.set(DRIVE_LS + 'connected', '1'); cookie.set(DRIVE_LS + 'connected', '1');
+  },
+  requestToken(prompt){
+    if (this.tokenPromise) return this.tokenPromise;
+    this.tokenPromise = (async () => {
+      await this.initClient();
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Délai dépassé')), prompt === 'none' ? 8000 : 180000);
+        this.pending = { resolve: () => { clearTimeout(timer); resolve(); }, reject: e => { clearTimeout(timer); reject(e); } };
+        try { this.client.requestAccessToken({ prompt }); } catch (e) { clearTimeout(timer); reject(e); }
+      });
+    })().finally(() => { this.tokenPromise = null; this.pending = null; });
+    return this.tokenPromise;
+  },
+  async ensureToken(){
+    if (this.token && Date.now() < this.exp) return;
+    await this.requestToken('none');
+  },
+  async api(url, opts = {}, retry = true){
+    await this.ensureToken();
+    const res = await fetchT(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + this.token } }, 20000);
+    if (res.status === 401 && retry) { this.token = null; return this.api(url, opts, false); }
+    if (!res.ok) { const e = new Error('Drive ' + res.status); e.status = res.status; throw e; }
+    return res;
+  },
+
+  async init(){
+    // jeton encore valide ?
+    const tok = ls.get(DRIVE_LS + 'token'), exp = Number(ls.get(DRIVE_LS + 'token_exp') || 0);
+    const wasConnected = ls.get(DRIVE_LS + 'connected') === '1' || cookie.get(DRIVE_LS + 'connected') === '1';
+    if (wasConnected && tok && Date.now() < exp) { this.token = tok; this.exp = exp; return this.onConnected(); }
+    if (wasConnected) {
+      this.ui('busy');
+      try { await this.requestToken('none'); return this.onConnected(); }
+      catch (e) { log('Drive (silencieux) : ' + e.message); this.ui('off'); }
+    }
+    if (sessionStorage.getItem(DRIVE_LS + 'skip') !== '1') showDlg('loginDlg');
+  },
+  async signIn(){
+    $('#loginMsg').textContent = '';
+    this.ui('busy');
+    try { await this.requestToken('select_account'); $('#loginDlg').close(); await this.onConnected(true); }
+    catch (e) { this.ui('off'); $('#loginMsg').textContent = 'Connexion impossible : ' + e.message; log('Drive : ' + e.message); }
+  },
+  async onConnected(fresh){
+    this.ui('on');
+    if (fresh) {
+      try {
+        const r = await fetchT('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + this.token } }, 8000);
+        const d = await r.json();
+        if (d.email) { ls.set(DRIVE_LS + 'hint', d.email); cookie.set(DRIVE_LS + 'hint', d.email); }
+      } catch {}
+    }
+    setStatus('ok', 'Google Drive connecté.');
+    await this.sync();
+    this.startPolling();
+  },
+  disconnect(){
+    if (!confirm('Déconnecter Google Drive ?')) return;
+    try { google.accounts.oauth2.revoke(this.token, () => {}); } catch {}
+    this.token = null; this.fileId = null; this.ready = false; this.stopPolling();
+    ['connected','hint','file_id','last_sync','last_sync_iso','token','token_exp','dirty'].forEach(k => { ls.del(DRIVE_LS + k); cookie.del(DRIVE_LS + k); });
+    ls.del(DRIVE_CACHE_KEY);
+    this.ui('off'); toast('Drive déconnecté (données locales conservées)');
+  },
+
+  async getFileId(force){
+    if (!force && this.fileId) return this.fileId;
+    if (!force) { const c = ls.get(DRIVE_LS + 'file_id'); if (c) return (this.fileId = c); }
+    const q = enc(`name='${DRIVE_FILE_NAME}'`);
+    const d = await (await this.api(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id,modifiedTime)`)).json();
+    this.fileId = d.files?.[0]?.id || null;
+    if (this.fileId) ls.set(DRIVE_LS + 'file_id', this.fileId); else ls.del(DRIVE_LS + 'file_id');
+    return this.fileId;
+  },
+  markSynced(iso){
+    ls.set(DRIVE_LS + 'last_sync_iso', iso);
+    ls.set(DRIVE_LS + 'last_sync', new Date(iso).toLocaleString('fr-FR'));
+  },
+
+  async sync(){
+    try {
+      let id = await this.getFileId();
+      let meta = null;
+      if (id) {
+        try { meta = await (await this.api(`https://www.googleapis.com/drive/v3/files/${id}?fields=modifiedTime`)).json(); }
+        catch (e) { if (e.status === 404) { id = await this.getFileId(true); if (id) meta = await (await this.api(`https://www.googleapis.com/drive/v3/files/${id}?fields=modifiedTime`)).json(); } else throw e; }
+      }
+      if (!id || !meta) { this.ready = true; if (hasLocalData()) this.scheduleSave(true); return; }
+      const remoteIso = meta.modifiedTime, localIso = ls.get(DRIVE_LS + 'last_sync_iso');
+      if (localIso && new Date(remoteIso) <= new Date(localIso)) { this.ready = true; if (this.dirty) this.scheduleSave(true); return; }
+      if (document.getElementById('conflictDlg').open) return;
+      const remote = await (await this.api(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`)).json();
+      if (!isObj(remote) || (!remote.profiles && !remote.appData)) { this.ready = true; return; }
+      if (!localIso || !this.dirty) { this.applyRemote(remote, remoteIso, !!localIso); }
+      else this.askConflict(remote, remoteIso);
+    } catch (e) {
+      log('Drive sync : ' + e.message);
+      if (e.message === 'Délai dépassé' || /oauth|popup|access_denied|immediate/i.test(e.message)) { this.ui('off'); this.token = null; if (sessionStorage.getItem(DRIVE_LS + 'skip') !== '1') showDlg('loginDlg'); }
+      else { this.ui('err'); setStatus('ko', 'Synchronisation Drive impossible.'); }
+    }
+  },
+  applyRemote(remote, iso, announce){
+    state = fromPayload(remote);
+    this.markSynced(iso); this.setDirty(false); this.ready = true;
+    saveLocal(); hydrateForm(); render();
+    setStatus('ok', 'Données chargées depuis Drive.');
+    if (announce) toast('Mis à jour depuis Drive');
+  },
+  askConflict(remote, iso){
+    this.remote = { remote, iso };
+    const count = p => ['githubApps','hfApps','koyebApps'].reduce((n, k) => n + arr(p.appData?.[k]).length, 0);
+    $('#conflictMsg').innerHTML = `Drive : <b>${count(remote)}</b> app(s) — ${esc(fmtDateTime(iso))}<br>Cet appareil : <b>${allRows().length}</b> app(s), avec des modifications non synchronisées.`;
+    showDlg('conflictDlg');
+  },
+  resolveConflict(useRemote){
+    const c = this.remote; this.remote = null;
+    $('#conflictDlg').close();
+    if (!c) return;
+    if (useRemote) this.applyRemote(c.remote, c.iso, true);
+    else { this.markSynced(c.iso); this.ready = true; this.scheduleSave(true); }
+  },
+
+  scheduleSave(now){
+    if (!this.token && ls.get(DRIVE_LS + 'connected') !== '1') return;   // mode local
+    this.setDirty(true);
+    if (!this.ready) return;                                              // on attend la 1re synchro
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.save(), now ? 100 : 1500);
+  },
+  async save(){
+    if (this.saving) { this.again = true; return; }
+    this.saving = true; this.ui('busy');
+    try {
+      const payload = JSON.stringify(toPayload());
+      let id = await this.getFileId(), data;
+      if (id) {
+        try { data = await (await this.api(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media&fields=id,modifiedTime`, { method:'PATCH', headers:{ 'Content-Type':'application/json' }, body: payload })).json(); }
+        catch (e) { if (e.status === 404) { this.fileId = null; ls.del(DRIVE_LS + 'file_id'); id = null; } else throw e; }
+      }
+      if (!id) {
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify({ name: DRIVE_FILE_NAME, parents:['appDataFolder'] })], { type:'application/json' }));
+        form.append('file', new Blob([payload], { type:'application/json' }));
+        data = await (await this.api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime', { method:'POST', body: form })).json();
+        this.fileId = data.id; ls.set(DRIVE_LS + 'file_id', data.id);
+      }
+      this.markSynced(data.modifiedTime || new Date().toISOString());
+      if (!this.again) this.setDirty(false);
+      ls.set(DRIVE_CACHE_KEY, payload);
+      this.ui('on'); if (!job.running) setStatus('ok', 'Sauvegardé sur Drive.');
+    } catch (e) {
+      log('Drive save : ' + e.message); this.ui('err'); setStatus('ko', 'Échec de la sauvegarde Drive.');
+    } finally {
+      this.saving = false;
+      if (this.again) { this.again = false; this.scheduleSave(); }
+    }
+  },
+  startPolling(){
+    if (this.poll) return;
+    this.poll = setInterval(() => { if (document.visibilityState === 'visible' && this.ready && !this.saving && !this.dirty && !job.running) this.sync(); }, 30000);
+  },
+  stopPolling(){ clearInterval(this.poll); this.poll = null; },
+};
+function hasLocalData(){ return allRows().length > 0 || SRC_KEYS.some(isConfigured); }
+
+/* ════════════════════════════════════════════════════════════
+   Thème & initialisation
+   ════════════════════════════════════════════════════════════ */
+function applyTheme(){
+  const t = prefs.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  document.documentElement.dataset.theme = t;
+  $('#metaTheme').content = t === 'light' ? '#f2f5fc' : '#0a0f1f';
+  setIcon($('#themeBtn .ic'), t === 'light' ? 'sun' : 'moon');
+}
+
+function bind(){
+  $('#scanBtn').addEventListener('click', () => runScan());
+  $('#checkBtn').addEventListener('click', checkAll);
+  $('#collapseBtn').addEventListener('click', () => { prefs.expanded = {}; persistPrefs(); $$('.card.open').forEach(c => c.classList.remove('open')); });
+  $('#settingsBtn').addEventListener('click', () => openSettings());
+  $('#statusChip').addEventListener('click', () => openSettings(true));
+  $('#themeBtn').addEventListener('click', () => {
+    const cur = document.documentElement.dataset.theme;
+    prefs.theme = cur === 'light' ? 'dark' : 'light'; persistPrefs(); applyTheme();
+  });
+  $('#driveBtn').addEventListener('click', () => drive.isConnected() ? drive.disconnect() : (sessionStorage.removeItem(DRIVE_LS + 'skip'), showDlg('loginDlg')));
+
+  $('#search').addEventListener('input', debounce(e => { query = fold(e.target.value).trim(); render(); }, 120));
+  $('#sortSel').addEventListener('change', e => { prefs.sort = e.target.value; persistPrefs(); render(); });
+  $('#groupSel').addEventListener('change', e => { prefs.group = e.target.value; persistPrefs(); render(); });
+  $('#chips').addEventListener('click', e => { const b = e.target.closest('[data-filter]'); if (!b) return; prefs.filter = b.dataset.filter; persistPrefs(); render(); });
+  $('#tiles').addEventListener('click', e => {
+    const b = e.target.closest('[data-status]'); if (!b) return;
+    prefs.status = prefs.status === b.dataset.status ? 'all' : b.dataset.status; persistPrefs(); render();
+  });
+  const main = $('main');
+  main.addEventListener('click', onListClick);
+  $('#list').addEventListener('input', e => {
+    if (!e.target.classList.contains('note')) return;
+    const card = e.target.closest('[data-key]'); if (card) saveNote(card.dataset.key, e.target.value);
+  });
+
+  // paramètres
+  ['ghProfiles','hfProfiles','ghToken','koUrls','koToken','koProxy'].forEach(id => $('#' + id).addEventListener('input', debounce(readForm, 400)));
+  $('#ghTokenToggle').addEventListener('click', () => {
+    const i = $('#ghToken'); const show = i.type === 'password'; i.type = show ? 'text' : 'password';
+  });
+  $('#exportBtn').addEventListener('click', exportData);
+  $('#importBtn').addEventListener('click', () => $('#importFile').click());
+  $('#importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) importData(f); e.target.value = ''; });
+  $('#clearDataBtn').addEventListener('click', () => {
+    if (!confirm('Vider la liste des apps ? (profils, favoris et notes sont conservés)')) return;
+    state.apps = { github:[], hf:[], koyeb:[] }; state.scanInfo = {}; prefs.expanded = {}; persistPrefs(); persist(); render(); toast('Apps supprimées');
+  });
+  $('#clearProfilesBtn').addEventListener('click', () => {
+    if (!confirm('Effacer tous les profils et tokens ?')) return;
+    state.profiles = blankState().profiles; persist(); hydrateForm(); render(); toast('Profils effacés');
+  });
+  $('#copyLogBtn').addEventListener('click', async () => toast(await copyText(logLines.join('\n')) ? 'Journal copié' : 'Copie impossible'));
+  $$('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
+  $$('dialog').forEach(d => d.addEventListener('click', e => { if (e.target === d && d.id === 'settingsDlg') d.close(); }));
+
+  // Drive
+  $('#loginGo').addEventListener('click', () => drive.signIn());
+  $('#loginSkip').addEventListener('click', () => { sessionStorage.setItem(DRIVE_LS + 'skip', '1'); $('#loginDlg').close(); });
+  $('#conflictLocal').addEventListener('click', () => drive.resolveConflict(false));
+  $('#conflictRemote').addEventListener('click', () => drive.resolveConflict(true));
+  $('#conflictDlg').addEventListener('cancel', e => e.preventDefault());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && drive.token && drive.ready && !drive.saving && !drive.dirty) drive.sync(); });
+
+  // raccourcis
+  document.addEventListener('keydown', e => {
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
+    if (e.key === '/' && !typing && !document.querySelector('dialog[open]')) { e.preventDefault(); $('#search').focus(); }
+    else if (e.key === 'Escape' && document.activeElement === $('#search')) { $('#search').value = ''; query = ''; render(); $('#search').blur(); }
+  });
+}
+
+function init(){
+  $$('[data-i]').forEach(n => setIcon(n, n.dataset.i));
+  setIcon($('#ghTokenToggle .ic'), 'eye');
+  $('#verLabel').textContent = APP_VERSION;
+  loadState();
+  applyTheme();
+  $('#sortSel').value = prefs.sort; $('#groupSel').value = prefs.group;
+  bind();
+  hydrateForm();
+  render();
+  setStatus('idle', 'Prêt.');
+  drive.ui('off');
+  drive.init();
+
+  // vérification silencieuse des statuts si les données sont un peu anciennes
+  const last = allRows().map(r => r.checkedAt).filter(Boolean).sort().pop();
+  if (allRows().length && (!last || Date.now() - new Date(last) > AUTO_CHECK_AFTER_MS)) setTimeout(() => { if (!job.running) checkAll(); }, 1500);
+}
+init();
+})();
+</script>
 </body>
 </html>
