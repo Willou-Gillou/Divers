@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark light" />
 <meta name="theme-color" content="#0b1020" id="metaTheme" />
-<title>Centraliseur Apps v3.2.0</title>
+<title>Centraliseur Apps</title>
+<meta name="description" content="Tableau de bord personnel : apps GitHub Pages, Hugging Face et Koyeb." />
+<meta name="robots" content="noindex" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%234b7dff'/%3E%3Ctext x='32' y='45' font-family='Arial,sans-serif' font-size='38' font-weight='700' text-anchor='middle' fill='white'%3EC%3C/text%3E%3C/svg%3E" />
 <style>
 :root{
   --bg:#0a0f1f; --bg2:#10182f; --surface:#151e3a; --surface2:#1b2748; --line:rgba(255,255,255,.09);
@@ -191,6 +194,7 @@ button.icon-btn,.btn.icon-btn{padding:0}
   .card{padding-left:14px}
 }
 /* ── Dialogues ── */
+.hint{font-size:11px;color:var(--muted)}
 dialog{border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--text);padding:0;width:min(640px,calc(100vw - 24px));max-height:calc(100dvh - 24px);box-shadow:0 30px 80px rgba(0,0,0,.5)}
 dialog::backdrop{background:rgba(5,8,18,.65);backdrop-filter:blur(3px)}
 .dlg-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:1}
@@ -237,7 +241,7 @@ pre.log{margin:0;padding:10px;border-radius:12px;background:var(--bg);border:1px
       <div class="logo">C</div>
       <div><h1>Centraliseur Apps</h1><small id="verLabel"></small></div>
     </div>
-    <button id="statusChip" class="status-chip" title="Voir le journal"><span id="statusDot" class="dot idle"></span><span id="statusText" class="t">Prêt</span></button>
+    <button id="statusChip" class="status-chip" title="Voir le journal" aria-live="polite"><span id="statusDot" class="dot idle"></span><span id="statusText" class="t">Prêt</span></button>
     <div class="top-actions">
       <button id="driveBtn" class="drive-btn sm" title="Google Drive"><span class="ic" data-i="cloud"></span><span class="lbl">Drive</span></button>
       <button id="themeBtn" class="icon-btn" aria-label="Changer de thème"><span class="ic" data-i="moon"></span></button>
@@ -255,7 +259,7 @@ pre.log{margin:0;padding:10px;border-radius:12px;background:var(--bg);border:1px
 
   <section class="toolbar">
     <div class="tb-row">
-      <div class="search"><span class="ic" data-i="search"></span><input id="search" type="search" placeholder="Rechercher une app… (touche /)" autocomplete="off" /></div>
+      <div class="search"><span class="ic" data-i="search"></span><input id="search" type="search" placeholder="Rechercher une app… (touche /)" title="Entrée ouvre le premier résultat" autocomplete="off" /></div>
       <div class="sel">
         <select id="sortSel" aria-label="Tri">
           <option value="recent">Plus récentes</option>
@@ -332,10 +336,13 @@ pre.log{margin:0;padding:10px;border-radius:12px;background:var(--bg);border:1px
       <div class="btns">
         <button id="exportBtn" class="sm"><span class="ic" data-i="download"></span>Exporter (sans tokens)</button>
         <button id="importBtn" class="sm"><span class="ic" data-i="upload"></span>Importer</button>
+        <button id="restoreBtn" class="sm">Restaurer la sauvegarde</button>
         <button id="clearDataBtn" class="sm danger">Vider les apps</button>
         <button id="clearProfilesBtn" class="sm danger">Effacer les profils</button>
       </div>
       <input id="importFile" type="file" accept="application/json,.json" class="hidden" />
+      <span class="hint" id="backupInfo"></span>
+      <span class="hint" id="aboutInfo"></span>
     </div>
     <div class="sec" id="logSec">
       <h3>Journal</h3>
@@ -371,6 +378,14 @@ pre.log{margin:0;padding:10px;border-radius:12px;background:var(--bg);border:1px
   </div>
 </dialog>
 
+<dialog id="askDlg">
+  <div class="modal-card">
+    <h2 id="askTitle"></h2>
+    <p class="muted" id="askMsg"></p>
+    <div class="modal-actions"><button id="askNo">Annuler</button><button id="askYes" class="primary">Confirmer</button></div>
+  </div>
+</dialog>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -380,9 +395,10 @@ pre.log{margin:0;padding:10px;border-radius:12px;background:var(--bg);border:1px
 /* ════════════════════════════════════════════════════════════
    Constantes
    ════════════════════════════════════════════════════════════ */
-const APP_VERSION = 'v3.2.0';
+const APP_VERSION = 'v3.3.0';
 const LS_MAIN  = 'centraliseur-apps-v3';
 const LS_PREFS = 'centraliseur-apps-prefs';
+const LS_BACKUP = 'centraliseur-apps-backup';
 const LEGACY = { profiles:'centraliseur-apps-profiles', data:'centraliseur-apps-data', koyeb:'centraliseur-apps-koyeb-urls' };
 const DEFAULT_PROXY = '/api/koyeb/apps';
 const AUTO_CHECK_AFTER_MS = 30 * 60 * 1000;
@@ -441,11 +457,26 @@ function fetchT(url, opts = {}, ms = 8000){
   const t = setTimeout(() => c.abort(), ms);
   return fetch(url, { ...opts, signal: c.signal }).finally(() => clearTimeout(t));
 }
+const online = () => navigator.onLine !== false;
+/** GET JSON avec un second essai sur erreur réseau, 429 ou 5xx. */
 async function jget(url, opts){
-  try { const r = await fetchT(url, opts, 12000); return r.ok ? await r.json() : null; } catch { return null; }
+  for (let i = 0; i < 2; i++) {
+    try {
+      const r = await fetchT(url, opts, 12000);
+      if (r.ok) return await r.json();
+      if (r.status < 500 && r.status !== 429) return null;
+    } catch {}
+    if (i === 0) await sleep(700);
+  }
+  return null;
 }
+/** Joignabilité sans CORS ; deux essais avant de conclure à une panne. */
 async function ping(url){
-  try { await fetchT(url, { mode:'no-cors', cache:'no-store' }, 7000); return true; } catch { return false; }
+  for (let i = 0; i < 2; i++) {
+    try { await fetchT(url, { mode:'no-cors', cache:'no-store' }, i ? 5000 : 7000); return true; } catch {}
+    if (i === 0) await sleep(800);
+  }
+  return false;
 }
 /** Exécute worker sur items avec `limit` tâches en parallèle. Ne rejette jamais (retourne {error}). */
 async function pool(items, limit, worker, stop){
@@ -564,7 +595,7 @@ function normRow(source, r){
     key: r.key || `${source}::${r.link}`, source,
     owner: str(r.owner), ownerLabel: str(r.ownerLabel || r.owner), name: str(r.name || r.link),
     pagePath: str(r.pagePath), version: v, updatedAt: r.updatedAt || null, link: str(r.link),
-    metaUrl: str(r.metaUrl), sourceInfo: str(r.sourceInfo), status: st, checkedAt: r.checkedAt || null,
+    metaUrl: str(r.metaUrl), sourceInfo: str(r.sourceInfo), status: st, checkedAt: r.checkedAt || null, statusSince: r.statusSince || null,
   };
 }
 function fromPayload(p){
@@ -680,7 +711,7 @@ function cardHtml(r){
   <div class="details">
     <div class="kv"><span>URL</span><code>${esc(r.link)}</code></div>
     <div class="kv"><span>Source</span><span>${srcLink}</span></div>
-    <div class="kv"><span>Statut</span><span>${st.label}${r.checkedAt ? ` · vérifié ${esc(ago(r.checkedAt))}` : ''}</span></div>
+    <div class="kv"><span>Statut</span><span>${st.label}${r.statusSince ? ` · changé ${esc(ago(r.statusSince))}` : ''}${r.checkedAt ? ` · vérifié ${esc(ago(r.checkedAt))}` : ''}</span></div>
     <div class="kv"><span>Version</span><span>${esc(r.version || '—')}</span></div>
     <div class="kv"><span>Mise à jour</span><span>${esc(fmtDate(r.updatedAt))}</span></div>
     <textarea class="note" placeholder="Note personnelle…" aria-label="Note">${esc(r.note)}</textarea>
@@ -701,6 +732,16 @@ let renderQueued = false;
 function renderSoon(){ if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; render(); }); }
 
 function render(){
+  const ae = document.activeElement;
+  const keep = ae && ae.classList && ae.classList.contains('note')
+    ? { key: ae.closest('[data-key]')?.dataset.key, value: ae.value, a: ae.selectionStart, b: ae.selectionEnd } : null;
+  renderInner();
+  if (keep && keep.key) {
+    const card = $$('.card').find(x => x.dataset.key === keep.key), t = card && $('.note', card);
+    if (t) { t.value = keep.value; t.focus(); try { t.setSelectionRange(keep.a, keep.b); } catch {} }
+  }
+}
+function renderInner(){
   const rows = viewRows();
   syncViewerBar();
   renderTiles(rows);
@@ -715,7 +756,7 @@ function render(){
       const configured = SRC_KEYS.some(isConfigured);
       empty.innerHTML = configured
         ? `<h2>Aucune application chargée</h2><p>Lance un scan pour récupérer tes apps.</p><button class="primary" data-empty="scan">Scanner</button>`
-        : `<h2>Bienvenue 👋</h2><p>Ajoute au moins un profil GitHub, Hugging Face ou Koyeb pour commencer.</p><button class="primary" data-empty="settings">Configurer les sources</button>`;
+        : `<h2>Bienvenue</h2><p>Ajoute au moins un profil GitHub, Hugging Face ou Koyeb pour commencer.</p><button class="primary" data-empty="settings">Configurer les sources</button>`;
     } else {
       empty.innerHTML = `<h2>Aucun résultat</h2><p>Aucune app ne correspond aux filtres actuels.</p><button data-empty="reset">Réinitialiser les filtres</button>`;
     }
@@ -794,14 +835,20 @@ async function detectLiveVersion(link){
   return found.find(Boolean) || '';
 }
 /** Pour GitHub Pages : une seule requête CORS donne statut réel + version. */
-async function probePage(url){
+async function probeOnce(url){
   try {
     const res = await fetchT(url, { cache:'no-store' }, 9000);
-    if (!res.ok) return { status:'down', version:'' };
-    return { status:'up', version: parseVersion(await res.text()) };
+    if (!res.ok) return { status:'down', version:'', code: res.status };
+    return { status:'up', version: parseVersion(await res.text()), code: res.status };
   } catch {
-    return { status: (await ping(url)) ? 'up' : 'down', version:'' };
+    return { status: (await ping(url)) ? 'up' : 'down', version:'', code: 0 };
   }
+}
+async function probePage(url){
+  let p = await probeOnce(url);
+  // une erreur HTTP passagère (5xx, 429…) est revérifiée avant d'afficher « hors ligne »
+  if (p.status === 'down' && p.code && p.code !== 404 && p.code !== 410) { await sleep(1200); p = await probeOnce(url); }
+  return p;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -813,8 +860,17 @@ class RateLimitError extends Error {
 const gh = {
   headers(){ const h = { Accept:'application/vnd.github+json' }; if (state.profiles.githubToken.trim()) h.Authorization = 'Bearer ' + state.profiles.githubToken.trim(); return h; },
   async api(path){
-    const res = await fetchT('https://api.github.com' + path, { headers: this.headers() }, 15000);
-    if (res.status === 429 || (res.status === 403 && res.headers.get('x-ratelimit-remaining') === '0')) {
+    let res;
+    for (let i = 0; ; i++) {
+      try {
+        res = await fetchT('https://api.github.com' + path, { headers: this.headers() }, 15000);
+        if (res.status < 500 || i) break;
+      } catch (e) {
+        if (i) throw new Error('GitHub injoignable (' + (e.name === 'AbortError' ? 'délai dépassé' : 'réseau') + ')');
+      }
+      await sleep(800);
+    }
+    if (res.status === 429 || (res.status === 403 && (res.headers.get('x-ratelimit-remaining') === '0' || res.headers.get('retry-after')))) {
       throw new RateLimitError(Number(res.headers.get('x-ratelimit-reset')) * 1000 || 0);
     }
     if (!res.ok) { const e = new Error(`GitHub ${res.status} ${path}`); e.status = res.status; throw e; }
@@ -917,7 +973,11 @@ async function scanGithub(ctx){
     } catch (e) {
       out.push(...prevOwner);
       if (e instanceof RateLimitError) limited = e;
-      else { errors.push(owner); log(`GitHub ${owner} : ${e.message}`); }
+      else {
+        errors.push(owner); log(`GitHub ${owner} : ${e.message}`);
+        if (e.status === 401) ctx.warn('token GitHub invalide ou expiré');
+        else if (e.status === 404) ctx.warn(`profil GitHub « ${owner} » introuvable`);
+      }
     }
   }
   return { rows: out, errors, limited, complete: !limited && !ctx.cancelled() };
@@ -980,11 +1040,11 @@ async function scanHf(ctx){
         if (!status) status = (await ping(link)) ? 'up' : 'down';
         let version = status === 'up' ? await detectLiveVersion(link) : '';
         if (!version) version = cleanVersion(info?.cardData?.version);
-        if (!version) version = cleanVersion(await hfLatestCommit(id));
+        if (!version) { const m = (await hfLatestCommit(id)).match(/\bv?\d+(?:\.\d+)+[\w.-]*/i); if (m) version = cleanVersion(m[0]); }
         ctx.progress(++done / list.length);
         return {
           key: `hf::${link}`, source:'hf', owner: id.split('/')[0], ownerLabel: id.split('/')[0], name: id.split('/').slice(1).join('/'),
-          pagePath:'', version: version || old?.version || '', updatedAt: info?.lastModified || space?.lastModified || null,
+          pagePath:'', version: version || (/\d/.test(old?.version || '') ? old.version : ''), updatedAt: info?.lastModified || space?.lastModified || null,
           link, metaUrl: hfRepoUrl(id), sourceInfo: id, status, checkedAt: new Date().toISOString(),
         };
       }, ctx.cancelled);
@@ -1083,10 +1143,12 @@ const sortAndDedupe = rows => dedupe(rows).sort(SORTERS.recent);
 
 async function runScan(only){
   if (job.running) { job.cancel = true; setStatus('wait', 'Annulation…'); return; }
+  if (!online()) { toast('Hors connexion : scan impossible'); return; }
   const wanted = (only ? [only] : SRC_KEYS).filter(isConfigured);
   if (!wanted.length) { toast('Configure d’abord une source'); openSettings(); return; }
   setBusy(true); job.cancel = false;
   const warnings = []; let limited = null;
+  const diff = { added:0, removed:0 };
   const ctx = {
     cancelled: () => job.cancel,
     status: t => setStatus('wait', t),
@@ -1098,9 +1160,18 @@ async function runScan(only){
     for (const s of wanted) {
       if (job.cancel) break;
       setProgress('indet');
+      const before = new Map(state.apps[s].map(x => [x.key, x]));
       const r = await SCANNERS[s](ctx);
-      state.apps[s] = sortAndDedupe(r.rows);
-      if (r.complete) state.scanInfo[s] = new Date().toISOString();
+      const nowIso = new Date().toISOString();
+      const next = sortAndDedupe(r.rows);
+      next.forEach(x => { const o = before.get(x.key); x.statusSince = o ? (o.status === x.status ? (o.statusSince || null) : nowIso) : null; });
+      if (r.complete && before.size) {
+        const keys = new Set(next.map(x => x.key));
+        diff.added += next.filter(x => !before.has(x.key)).length;
+        diff.removed += [...before.keys()].filter(k => !keys.has(k)).length;
+      }
+      state.apps[s] = next;
+      if (r.complete) state.scanInfo[s] = nowIso;
       if (r.errors.length) warnings.push(`${SOURCES[s].title} : ${r.errors.length} erreur(s)`);
       if (r.limited) limited = r.limited;
       saveLocal(); renderSoon();
@@ -1112,7 +1183,10 @@ async function runScan(only){
       setStatus('ko', `Quota GitHub atteint — réessaie vers ${when}${state.profiles.githubToken ? '' : ' ou ajoute un token'}`);
     } else if (job.cancel) setStatus('wait', 'Scan annulé (données précédentes conservées).');
     else if (warnings.length) setStatus('wait', 'Scan terminé : ' + warnings.join(' · '));
-    else setStatus('ok', `${allRows().length} app(s) synchronisée(s).`);
+    else {
+      const d = [diff.added && `${diff.added} nouvelle(s)`, diff.removed && `${diff.removed} retirée(s)`].filter(Boolean).join(', ');
+      setStatus('ok', `${allRows().length} app(s) synchronisée(s)${d ? ' — ' + d : ''}.`);
+    }
     log({ github: state.apps.github.length, hf: state.apps.hf.length, koyeb: state.apps.koyeb.length, warnings });
   } catch (e) {
     console.error(e); log('Erreur scan : ' + e.message); setStatus('ko', 'Erreur pendant le scan.');
@@ -1120,6 +1194,7 @@ async function runScan(only){
 }
 
 async function refreshRow(row){
+  if (!online()) return row;
   const patch = { checkedAt: new Date().toISOString() };
   if (row.source === 'github') {
     const p = await probePage(row.link);
@@ -1137,13 +1212,17 @@ async function refreshRow(row){
     patch.status = !ok ? 'down' : (row.status === 'sleep' ? 'sleep' : 'up');
     if (ok) { const v = await detectLiveVersion(row.link); if (v) patch.version = v; }
   }
+  if (!online() && patch.status === 'down') return row;      // connexion perdue en cours de route : on ne conclut rien
+  if (patch.status !== row.status) patch.statusSince = patch.checkedAt;
   Object.assign(row, patch);
   return row;
 }
-async function checkAll(){
+async function checkAll(silent){
   if (job.running) return;
+  silent = silent === true;
+  if (!online()) { if (!silent) toast('Hors connexion : vérification impossible'); return; }
   const rows = allRows();
-  if (!rows.length) { toast('Rien à vérifier'); return; }
+  if (!rows.length) { if (!silent) toast('Rien à vérifier'); return; }
   setBusy(true);
   let done = 0;
   setStatus('wait', `Vérification 0/${rows.length}…`); setProgress(0);
@@ -1155,6 +1234,12 @@ async function checkAll(){
   setBusy(false); job.cancel = false; render();
   const down = rows.filter(r => r.status === 'down').length;
   setStatus(down ? 'wait' : 'ok', down ? `${down} app(s) hors ligne.` : 'Tout est en ligne.');
+}
+
+function autoCheck(){
+  if (job.running || !online() || document.visibilityState !== 'visible' || !allRows().length) return;
+  const last = allRows().map(r => r.checkedAt).filter(Boolean).sort().pop();
+  if (!last || Date.now() - new Date(last) > AUTO_CHECK_AFTER_MS) checkAll(true);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1215,6 +1300,44 @@ const saveNote = debounce((key, text) => {
 }, 500);
 
 /* ════════════════════════════════════════════════════════════
+   Confirmation & sauvegarde locale automatique
+   ════════════════════════════════════════════════════════════ */
+function ask(title, msg, okLabel, danger){
+  return new Promise(resolve => {
+    const d = $('#askDlg'), yes = $('#askYes'), no = $('#askNo');
+    $('#askTitle').textContent = title; $('#askMsg').textContent = msg || '';
+    yes.textContent = okLabel || 'Confirmer'; yes.className = danger ? 'danger' : 'primary';
+    const onClose = () => done(false);
+    const done = v => { d.removeEventListener('close', onClose); yes.onclick = no.onclick = null; if (d.open) d.close(); resolve(v); };
+    yes.onclick = () => done(true); no.onclick = () => done(false);
+    d.addEventListener('close', onClose);
+    d.showModal(); no.focus();
+  });
+}
+function backup(reason){
+  if (!hasLocalData()) return;
+  ls.set(LS_BACKUP, JSON.stringify({ at: new Date().toISOString(), reason, data: toPayload() }));
+}
+function readBackup(){
+  try { const b = JSON.parse(ls.get(LS_BACKUP)); return isObj(b) && isObj(b.data) ? b : null; } catch { return null; }
+}
+async function restoreBackup(){
+  const b = readBackup();
+  if (!b) return toast('Aucune sauvegarde disponible');
+  if (!await ask('Restaurer la sauvegarde ?', `État du ${fmtDateTime(b.at)} (${b.reason}). L’état actuel sera conservé comme nouvelle sauvegarde.`, 'Restaurer')) return;
+  const current = toPayload();
+  state = fromPayload(b.data);
+  ls.set(LS_BACKUP, JSON.stringify({ at: new Date().toISOString(), reason:'avant restauration', data: current }));
+  persist(); hydrateForm(); render(); refreshSettingsInfo(); toast('Sauvegarde restaurée');
+}
+function refreshSettingsInfo(){
+  const b = readBackup();
+  $('#restoreBtn').disabled = !b;
+  $('#backupInfo').textContent = b ? `Sauvegarde automatique du ${fmtDateTime(b.at)} (${b.reason}).` : 'Aucune sauvegarde automatique pour l’instant.';
+  $('#aboutInfo').textContent = `Centraliseur Apps ${APP_VERSION} · Drive : ${drive.token ? 'connecté, dernière synchro ' + (ls.get(DRIVE_LS + 'last_sync') || '—') : 'non connecté'}.`;
+}
+
+/* ════════════════════════════════════════════════════════════
    Paramètres
    ════════════════════════════════════════════════════════════ */
 function hydrateForm(){
@@ -1239,6 +1362,7 @@ function readForm(){
 function openSettings(focusLog){
   hydrateForm();
   $('#logBox').textContent = logLines.length ? logLines.join('\n') : '—';
+  refreshSettingsInfo();
   const dlg = $('#settingsDlg');
   if (!dlg.open) dlg.showModal();
   if (focusLog) $('#logSec').scrollIntoView({ block:'end' });
@@ -1256,11 +1380,13 @@ function exportData(){
 async function importData(file){
   try {
     const incoming = fromPayload(JSON.parse(await file.text()));
+    if (!incoming.apps.github.length && !incoming.apps.hf.length && !incoming.apps.koyeb.length && !incoming.profiles.github.length && !incoming.profiles.hf.length && !incoming.profiles.koyebUrls) throw new Error('aucune donnée reconnue dans ce fichier');
+    backup('avant import');
     const keepGh = state.profiles.githubToken, keepKo = state.profiles.koyebToken;
     state = incoming;
     if (!state.profiles.githubToken) state.profiles.githubToken = keepGh;
     if (!state.profiles.koyebToken) state.profiles.koyebToken = keepKo;
-    persist(); hydrateForm(); render(); toast('Import terminé');
+    persist(); hydrateForm(); render(); refreshSettingsInfo(); toast('Import terminé');
   } catch (e) { toast('Fichier invalide'); log('Import : ' + e.message); }
 }
 
@@ -1369,8 +1495,8 @@ const drive = {
     await this.sync();
     this.startPolling();
   },
-  disconnect(){
-    if (!confirm('Déconnecter Google Drive ?')) return;
+  async disconnect(){
+    if (!await ask('Déconnecter Google Drive ?', 'Les données restent sur cet appareil et dans Drive.', 'Déconnecter')) return;
     try { google.accounts.oauth2.revoke(this.token, () => {}); } catch {}
     this.token = null; this.fileId = null; this.ready = false; this.stopPolling();
     ['connected','hint','file_id','last_sync','last_sync_iso','token','token_exp','dirty'].forEach(k => { ls.del(DRIVE_LS + k); cookie.del(DRIVE_LS + k); });
@@ -1415,6 +1541,7 @@ const drive = {
     }
   },
   applyRemote(remote, iso, announce){
+    backup('avant synchro Drive');
     state = fromPayload(remote);
     this.markSynced(iso); this.setDirty(false); this.ready = true;
     saveLocal(); hydrateForm(); render();
@@ -1448,6 +1575,20 @@ const drive = {
     try {
       const payload = JSON.stringify(toPayload());
       let id = await this.getFileId(), data;
+      if (id) {   // garde-fou : ne jamais écraser une version plus récente venue d'un autre appareil
+        try {
+          const meta = await (await this.api(`https://www.googleapis.com/drive/v3/files/${id}?fields=modifiedTime`)).json();
+          const localIso = ls.get(DRIVE_LS + 'last_sync_iso');
+          if (localIso && meta.modifiedTime && new Date(meta.modifiedTime) > new Date(localIso)) {
+            const remote = await (await this.api(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`)).json();
+            if (isObj(remote) && (remote.profiles || remote.appData)) {
+              this.again = false; this.ui('on');
+              if (!$('#conflictDlg').open) this.askConflict(remote, meta.modifiedTime);
+              return;
+            }
+          }
+        } catch (e) { if (e.status !== 404) throw e; }
+      }
       if (id) {
         try { data = await (await this.api(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media&fields=id,modifiedTime`, { method:'PATCH', headers:{ 'Content-Type':'application/json' }, body: payload })).json(); }
         catch (e) { if (e.status === 404) { this.fileId = null; ls.del(DRIVE_LS + 'file_id'); id = null; } else throw e; }
@@ -1460,11 +1601,19 @@ const drive = {
         this.fileId = data.id; ls.set(DRIVE_LS + 'file_id', data.id);
       }
       this.markSynced(data.modifiedTime || new Date().toISOString());
+      this.fails = 0;
       if (!this.again) this.setDirty(false);
       ls.set(DRIVE_CACHE_KEY, payload);
       this.ui('on'); if (!job.running) setStatus('ok', 'Sauvegardé sur Drive.');
     } catch (e) {
-      log('Drive save : ' + e.message); this.ui('err'); setStatus('ko', 'Échec de la sauvegarde Drive.');
+      log('Drive save : ' + e.message);
+      if (/Délai dépassé|oauth|popup|access_denied|interaction|login_required/i.test(e.message)) {
+        this.token = null; this.ui('off'); setStatus('ko', 'Session Drive expirée — reconnecte-toi avec le bouton Drive.');
+      } else {
+        this.ui('err');
+        setStatus('ko', online() ? 'Échec de la sauvegarde Drive — nouvel essai automatique.' : 'Hors connexion — sauvegarde Drive en attente.');
+        if (online() && (this.fails = (this.fails || 0) + 1) <= 5) { clearTimeout(this.retryT); this.retryT = setTimeout(() => this.scheduleSave(true), 30000); }
+      }
     } finally {
       this.saving = false;
       if (this.again) { this.again = false; this.scheduleSave(); }
@@ -1497,6 +1646,8 @@ function syncViewerBar(){
   $('#vPath').textContent = row && row.pagePath && row.pagePath !== 'index.html' ? '/ ' + row.pagePath : '';
   const dot = $('#vDot'); dot.classList.toggle('hidden', !row);
   dot.className = 'dot ' + (row ? row.status : 'unknown') + (row ? '' : ' hidden');
+  const down = allRows().filter(r => r.status === 'down').length;
+  document.title = (down ? `(${down}) ` : '') + (row ? row.name + ' · ' : '') + 'Centraliseur Apps';
 }
 function markCurrent(){
   $$('.card.current').forEach(c => c.classList.remove('current'));
@@ -1509,7 +1660,7 @@ function showInPanel(row, restore){
   prefs.current = row.key; persistPrefs();
   const f = $('#frame');
   $('#vLoad').classList.remove('hidden');
-  clearTimeout(loadTimer); loadTimer = setTimeout(() => $('#vLoad').classList.add('hidden'), 15000);
+  clearTimeout(loadTimer); loadTimer = setTimeout(() => { $('#vLoad').classList.add('hidden'); toast('Chargement long : essaie l’ouverture dans un onglet'); }, 15000);
   f.src = row.link;
   document.body.classList.add('has-view');
   syncViewerBar(); markCurrent();
@@ -1606,13 +1757,16 @@ function bind(){
   $('#exportBtn').addEventListener('click', exportData);
   $('#importBtn').addEventListener('click', () => $('#importFile').click());
   $('#importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) importData(f); e.target.value = ''; });
-  $('#clearDataBtn').addEventListener('click', () => {
-    if (!confirm('Vider la liste des apps ? (profils, favoris et notes sont conservés)')) return;
-    state.apps = { github:[], hf:[], koyeb:[] }; state.scanInfo = {}; prefs.expanded = {}; persistPrefs(); persist(); render(); toast('Apps supprimées');
+  $('#restoreBtn').addEventListener('click', restoreBackup);
+  $('#clearDataBtn').addEventListener('click', async () => {
+    if (!await ask('Vider la liste des apps ?', 'Profils, favoris et notes sont conservés. Une sauvegarde automatique est créée.', 'Vider', true)) return;
+    backup('avant vidage des apps');
+    state.apps = { github:[], hf:[], koyeb:[] }; state.scanInfo = {}; prefs.expanded = {}; persistPrefs(); persist(); render(); refreshSettingsInfo(); toast('Apps supprimées');
   });
-  $('#clearProfilesBtn').addEventListener('click', () => {
-    if (!confirm('Effacer tous les profils et tokens ?')) return;
-    state.profiles = blankState().profiles; persist(); hydrateForm(); render(); toast('Profils effacés');
+  $('#clearProfilesBtn').addEventListener('click', async () => {
+    if (!await ask('Effacer les profils et les tokens ?', 'Une sauvegarde automatique est créée.', 'Effacer', true)) return;
+    backup('avant effacement des profils');
+    state.profiles = blankState().profiles; persist(); hydrateForm(); render(); refreshSettingsInfo(); toast('Profils effacés');
   });
   $('#copyLogBtn').addEventListener('click', async () => toast(await copyText(logLines.join('\n')) ? 'Journal copié' : 'Copie impossible'));
   $$('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
@@ -1626,10 +1780,25 @@ function bind(){
   $('#conflictDlg').addEventListener('cancel', e => e.preventDefault());
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && drive.token && drive.ready && !drive.saving && !drive.dirty) drive.sync(); });
 
+  // connexion, autres onglets, vérification périodique
+  window.addEventListener('offline', () => setStatus('ko', 'Hors connexion — données en cache affichées.'));
+  window.addEventListener('online', () => {
+    setStatus('ok', 'Connexion rétablie.');
+    if (drive.token && drive.ready) { if (drive.dirty) drive.scheduleSave(true); else drive.sync(); }
+    autoCheck();
+  });
+  window.addEventListener('storage', e => {
+    if (e.key !== LS_MAIN || !e.newValue || job.running) return;
+    try { state = fromPayload(JSON.parse(e.newValue)); if (!$('#settingsDlg').open) hydrateForm(); render(); } catch {}
+  });
+  document.addEventListener('visibilitychange', autoCheck);
+  setInterval(autoCheck, 5 * 60 * 1000);
+
   // raccourcis
   document.addEventListener('keydown', e => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
     if (e.key === '/' && !typing && !document.querySelector('dialog[open]')) { e.preventDefault(); $('#search').focus(); }
+    else if (e.key === 'Enter' && document.activeElement === $('#search')) { const c = $('#list .card'); const row = c && findRow(c.dataset.key); if (row) openApp(row); }
     else if (e.key === 'Escape' && document.activeElement === $('#search')) { $('#search').value = ''; query = ''; render(); $('#search').blur(); }
   });
 }
@@ -1652,10 +1821,11 @@ function init(){
   drive.ui('off');
   drive.init();
 
-  // vérification silencieuse des statuts si les données sont un peu anciennes
-  const last = allRows().map(r => r.checkedAt).filter(Boolean).sort().pop();
-  if (allRows().length && (!last || Date.now() - new Date(last) > AUTO_CHECK_AFTER_MS)) setTimeout(() => { if (!job.running) checkAll(); }, 1500);
+  if (!online()) setStatus('ko', 'Hors connexion — données en cache affichées.');
+  setTimeout(autoCheck, 1500);   // vérification silencieuse si les statuts datent
 }
+window.addEventListener('error', e => log('Erreur : ' + (e.message || 'inconnue')));
+window.addEventListener('unhandledrejection', e => log('Erreur asynchrone : ' + (e.reason && e.reason.message || e.reason)));
 init();
 })();
 </script>
